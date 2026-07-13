@@ -41,18 +41,16 @@ export default function WhatsAppChat({ variant }: Props) {
 
   const answeredMessages = useRef<Set<string>>(new Set());
   const platformRedirectAnswered = useRef(false);
-  const conversationStarted = useRef(false);
 
   // ─── Auto-scroll ────────────────────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [state.messages, state.isTyping]);
 
-  // ─── Reset on variant change ────────────────────────────────────────────────
+  // ─── Reset on variant change (key prop forces full remount, but this guards state) ──
   useEffect(() => {
     answeredMessages.current.clear();
     platformRedirectAnswered.current = false;
-    conversationStarted.current = false;
     dispatch({ type: "RESET" });
     msgIdCounter = 0;
   }, [variant]);
@@ -190,26 +188,57 @@ export default function WhatsAppChat({ variant }: Props) {
   );
 
   // ─── Start conversation on mount ────────────────────────────────────────────
+  // Cleanup-based cancellation handles React Strict Mode double-invoke correctly.
   useEffect(() => {
-    if (conversationStarted.current) return;
-    conversationStarted.current = true;
+    let cancelled = false;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    function safeTimeout(fn: () => void, ms: number) {
+      const id = setTimeout(() => { if (!cancelled) fn(); }, ms);
+      timers.push(id);
+    }
+
+    function cancelAll() {
+      cancelled = true;
+      timers.forEach(clearTimeout);
+      dispatch({ type: "RESET" });
+      answeredMessages.current.clear();
+      platformRedirectAnswered.current = false;
+      msgIdCounter = 0;
+    }
 
     let i = 0;
     const ctx = { name: "", email: "", profile: null };
 
     function runOpening() {
-      if (i >= OPENING_STEPS.length) return;
+      if (cancelled || i >= OPENING_STEPS.length) return;
       const step = OPENING_STEPS[i];
-      emitBotMessage(step, ctx, () => {
+      dispatch({ type: "SET_TYPING", value: true });
+      safeTimeout(() => {
+        if (cancelled) return;
+        dispatch({ type: "SET_TYPING", value: false });
+        const msg = {
+          id: `msg-${++msgIdCounter}`,
+          actor: "bot" as const,
+          type: step.type as import("@/lib/chatReducer").ChatMessage["type"],
+          content: typeof step.content === "function" ? step.content(ctx) : step.content,
+          options: step.options,
+          timestamp: new Date(),
+          ticks: "read" as const,
+        };
+        dispatch({ type: "ADD_MESSAGE", message: msg });
         if (step.requiresInput) {
           dispatch({ type: "SET_PHASE", phase: "opening" });
         } else {
           i++;
           runOpening();
         }
-      });
+      }, step.delay ?? 800);
     }
-    setTimeout(runOpening, 400);
+
+    safeTimeout(runOpening, 400);
+
+    return cancelAll;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variant]);
 
@@ -302,6 +331,12 @@ export default function WhatsAppChat({ variant }: Props) {
       } else if (next.type === "quickReply") {
         emitBotMessage(next, newCtx);
         dispatch({ type: "SET_STEP_INDEX", index: nextStepIdx });
+      } else if (next.type === "platformRedirect") {
+        // Show the redirect card and wait for user to click "Confirmar" — do NOT auto-advance
+        emitBotMessage(next, newCtx);
+        dispatch({ type: "SET_PHASE", phase: "flow" });
+        dispatch({ type: "SET_STEP_INDEX", index: nextStepIdx });
+        dispatch({ type: "SET_CONTEXT", context: newCtx });
       } else {
         emitBotMessage(next, newCtx, () => {
           const afterIdx = nextStepIdx + 1;
