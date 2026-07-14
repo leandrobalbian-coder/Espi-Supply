@@ -383,6 +383,49 @@ export const VARIANT_C_STEPS: Step[] = [
   },
 ];
 
+// ─── Correos ya registrados (simulación) ─────────────────────────────────────
+// En producción esto sería una llamada a la API. Aquí hardcodeamos para demo.
+export const REGISTERED_EMAILS = new Set([
+  "test@spot2.mx",
+  "demo@spot2.mx",
+  "juan@empresa.com",
+  "maria@gmail.com",
+  "already@registered.com",
+]);
+
+export const EXISTING_USER_STEPS: Step[] = [
+  {
+    id: "existing_found",
+    actor: "bot",
+    type: "quickReply",
+    content: (ctx) => `El correo ${ctx.email} ya está registrado en Spot2.`,
+    contentKey: "existing_user_found",
+    delay: 800,
+    options: [
+      { id: "existing_login",       label: "Entrar a mi cuenta" },
+      { id: "existing_retry_email", label: "Usar otro correo"   },
+    ],
+    requiresInput: true,
+  },
+  {
+    id: "existing_login_redirect",
+    actor: "bot",
+    type: "platformRedirect",
+    content: "Te llevamos al inicio de sesión.",
+    contentKey: "existing_login_redirect",
+    delay: 700,
+  },
+  {
+    id: "existing_ask_another",
+    actor: "bot",
+    type: "userInput",
+    content: "¿Cuál es el otro correo que querés usar?",
+    contentKey: "existing_ask_another_email",
+    delay: 600,
+    requiresInput: true,
+  },
+];
+
 // ─── Flujo de publicación de espacio ─────────────────────────────────────────
 
 // 8 tipos reales de Spot2 — dentro del límite de 10 ítems de Meta List Message

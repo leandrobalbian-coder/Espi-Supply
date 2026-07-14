@@ -37,7 +37,8 @@ export interface ChatState {
     | "publish_photos"
     | "publish_confirm"
     | "publish_redirect_c"
-    | "publish_done";
+    | "publish_done"
+    | "existing_user";
   stepIndex: number;
   context: {
     name: string;

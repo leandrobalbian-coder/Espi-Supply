@@ -25,6 +25,8 @@ import {
   V1_CODE_SUCCESS_STEP,
   V1_CODE_WRONG_STEP,
   V1_RESENT_STEP,
+  EXISTING_USER_STEPS,
+  REGISTERED_EMAILS,
   type Variant,
   type VerificationMethod,
   type Step,
@@ -380,6 +382,19 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
       return;
     }
 
+    if (state.phase === "existing_user") {
+      if (optId === "existing_login") {
+        emitBotMessage(EXISTING_USER_STEPS[1], ctx);
+        dispatch({ type: "SET_PHASE", phase: "bye" });
+      } else if (optId === "existing_retry_email") {
+        emitBotMessage(EXISTING_USER_STEPS[2], ctx, () => {
+          dispatch({ type: "SET_AWAITING_INPUT", target: "email" });
+        });
+        dispatch({ type: "SET_PHASE", phase: "flow" });
+      }
+      return;
+    }
+
     if (state.phase === "publish_confirm") {
       if (optId === "space_publish") {
         const stepsRef = variant === "B" ? PUBLISH_VARIANT_B_STEPS : PUBLISH_VARIANT_A_STEPS;
@@ -652,6 +667,13 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     const newCtx = { ...state.context, [target ?? "name"]: val };
     dispatch({ type: "SET_CONTEXT", context: { [target ?? "name"]: val } });
     dispatch({ type: "SET_AWAITING_INPUT", target: null });
+
+    // Branch: correo ya registrado
+    if (target === "email" && REGISTERED_EMAILS.has(val.toLowerCase())) {
+      emitBotMessage(EXISTING_USER_STEPS[0], newCtx);
+      dispatch({ type: "SET_PHASE", phase: "existing_user" });
+      return;
+    }
 
     // Corrección granular
     if (state.correctionMode !== null) {

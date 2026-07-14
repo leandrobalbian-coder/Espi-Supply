@@ -422,6 +422,26 @@ export const TONED_COPY: Record<string, Record<Tone, CopyValue>> = {
     neutro:  (ctx) => `Bienvenido de nuevo, ${ctx.name}. Continuamos — ya tenemos tu correo (${ctx.email}).`,
     directo: (ctx) => `Seguimos, ${ctx.name}. Correo ya guardado.`,
   },
+
+  // ─── Usuario existente ────────────────────────────────────────────────────────
+
+  existing_user_found: {
+    calido:  (ctx) => `¡Ese correo ya tiene una cuenta en Spot2! 👋 ¿Querés entrar con ${ctx.email} o preferís usar otro correo?`,
+    neutro:  (ctx) => `El correo ${ctx.email} ya está registrado en Spot2. ¿Deseas iniciar sesión con él o usar un correo diferente?`,
+    directo: (ctx) => `${ctx.email} ya tiene cuenta. ¿Entrás o usás otro correo?`,
+  },
+
+  existing_login_redirect: {
+    calido:  "¡Perfecto! Te llevo al acceso — ingresá con tu correo y contraseña (o recupérala si la olvidaste) 🔑",
+    neutro:  "Te redireccionamos al inicio de sesión. Ingresa con tu correo y contraseña.",
+    directo: "Abriendo acceso a tu cuenta.",
+  },
+
+  existing_ask_another_email: {
+    calido:  "Sin problema 😊 ¿Cuál es el otro correo que querés usar?",
+    neutro:  "De acuerdo. ¿Cuál es el correo que deseas usar?",
+    directo: "¿Cuál es el otro correo?",
+  },
 };
 
 export function getCopy(key: string, tone: Tone, ctx: ConversationContext): string {
