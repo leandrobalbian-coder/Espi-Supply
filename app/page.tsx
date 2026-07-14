@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import PhoneMockup from "@/components/PhoneMockup";
-import type { Variant } from "@/lib/flows";
+import type { Variant, VerificationMethod } from "@/lib/flows";
 import { AGENT_NAME } from "@/lib/persona";
 
 const VARIANTS: { id: Variant; label: string; tagline: string }[] = [
@@ -10,8 +10,17 @@ const VARIANTS: { id: Variant; label: string; tagline: string }[] = [
   { id: "C", label: "Variante C", tagline: "Pre-rellenado en plataforma" },
 ];
 
+const VERIFICATION_METHODS: { id: VerificationMethod; label: string; tagline: string }[] = [
+  { id: "V0", label: "V0 — Sin verificación", tagline: "Directo al onboarding" },
+  { id: "V1", label: "V1 — Código OTP", tagline: "6 dígitos en el chat" },
+  { id: "V2", label: "V2 — Magic link", tagline: "Enlace diferido por correo" },
+];
+
+const DEMO_CODE = "123456";
+
 export default function Home() {
   const [variant, setVariant] = useState<Variant>("A");
+  const [verificationMethod, setVerificationMethod] = useState<VerificationMethod>("V0");
   const [showIntro, setShowIntro] = useState(true);
 
   if (showIntro) {
@@ -59,11 +68,7 @@ export default function Home() {
                     `}
                   >
                     <div className="flex items-center gap-2 mb-0.5">
-                      <span
-                        className={`text-[13px] font-bold ${
-                          variant === v.id ? "text-[#1C1F2A]" : "text-[#424552]"
-                        }`}
-                      >
+                      <span className={`text-[13px] font-bold ${variant === v.id ? "text-[#1C1F2A]" : "text-[#424552]"}`}>
                         {v.label}
                       </span>
                       {variant === v.id && (
@@ -78,24 +83,88 @@ export default function Home() {
               </div>
             </section>
 
-            {/* Metrics card */}
+            {/* Verification method selector */}
+            <section>
+              <h2 className="text-[11px] font-bold text-[#9898A2] uppercase tracking-widest mb-3">
+                Método de verificación
+              </h2>
+              <div className="flex flex-col gap-2">
+                {VERIFICATION_METHODS.map((vm) => (
+                  <button
+                    key={vm.id}
+                    onClick={() => setVerificationMethod(vm.id)}
+                    className={`
+                      w-full text-left px-4 py-3 rounded-xl border-2 transition-all duration-150
+                      focus:outline-none focus:ring-2 focus:ring-[#FFAA00]/40
+                      ${verificationMethod === vm.id
+                        ? "border-[#FFAA00] bg-[#FFFBF0]"
+                        : "border-[#E5E5E5] bg-white hover:border-[#FFAA00]/40"
+                      }
+                    `}
+                  >
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={`text-[13px] font-bold ${verificationMethod === vm.id ? "text-[#1C1F2A]" : "text-[#424552]"}`}>
+                        {vm.label}
+                      </span>
+                      {verificationMethod === vm.id && (
+                        <span className="text-[10px] font-bold text-[#FFAA00] bg-[#FFAA00]/10 px-2 py-0.5 rounded-full">
+                          Activa
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[12px] text-[#737373]">{vm.tagline}</p>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {/* V1 OTP hint card */}
+            {verificationMethod === "V1" && (
+              <section>
+                <div
+                  className="rounded-xl p-3 flex flex-col gap-1.5"
+                  style={{
+                    border: "1.5px dashed #FFAA00",
+                    background: "#FFFBF0",
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-[16px]">💡</span>
+                    <span className="text-[11px] font-bold text-[#424552] uppercase tracking-wider">
+                      Andamiaje de demo
+                    </span>
+                  </div>
+                  <p className="text-[12px] text-[#424552] leading-relaxed">
+                    Código OTP fijo para esta demo:
+                  </p>
+                  <p className="text-[22px] font-bold text-[#1C1F2A] tracking-[0.3em] text-center py-1">
+                    {DEMO_CODE}
+                  </p>
+                  <p className="text-[11px] text-[#9898A2] leading-relaxed">
+                    En producción se enviaría un código real al correo del usuario.
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {/* Metrics card — two sections */}
             <section>
               <h2 className="text-[11px] font-bold text-[#9898A2] uppercase tracking-widest mb-3">
                 Métricas de fricción
               </h2>
-              <VariantMetricsCard variant={variant} />
+              <CombinedMetricsCard variant={variant} verificationMethod={verificationMethod} />
             </section>
 
             {/* Info note */}
             <section className="text-[11px] text-[#9898A2] bg-[#F5F5F5] rounded-xl p-3 leading-relaxed">
-              Selecciona una variante para reiniciar la conversación y ver el flujo de punta a punta.
+              Selecciona una variante o método de verificación para reiniciar la conversación.
             </section>
           </div>
         </aside>
 
         {/* Phone mockup */}
         <main className="flex-1 overflow-hidden bg-[#F5F5F5]">
-          <PhoneMockup variant={variant} />
+          <PhoneMockup variant={variant} verificationMethod={verificationMethod} />
         </main>
       </div>
     </div>
@@ -119,11 +188,11 @@ function IntroScreen({ onStart }: { onStart: () => void }) {
         </h1>
         <p className="text-white/60 text-[15px] leading-relaxed mb-10">
           {AGENT_NAME} ayuda a propietarios y brokers a crear su cuenta en Spot2 desde WhatsApp,
-          sin depender de un gestor de cuenta. Esta demo muestra 3 variantes de UX para reducir la fricción.
+          sin depender de un gestor de cuenta. Esta demo muestra 3 variantes de UX y 3 métodos de verificación.
         </p>
 
         <div className="flex flex-wrap gap-2 justify-center mb-10">
-          {["3 variantes de flujo", "Selector de perfil", "Roadmap futuro", "Voz de Espi"].map((f) => (
+          {["3 variantes de flujo", "3 métodos de verificación", "Selector de perfil", "Voz de Espi"].map((f) => (
             <span
               key={f}
               className="text-[12px] font-semibold text-[#1C1F2A] bg-[#FFAA00] px-3 py-1 rounded-full"
@@ -154,10 +223,10 @@ function IntroScreen({ onStart }: { onStart: () => void }) {
   );
 }
 
-// ─── Metrics card ─────────────────────────────────────────────────────────────
+// ─── Combined metrics (variant + verification) ────────────────────────────────
 // [PLACEHOLDER — validar números reales con Growth/Producto]
 
-const METRICS: Record<
+const VARIANT_METRICS: Record<
   Variant,
   { steps: number; taps: number; friction: "Baja" | "Media" | "Alta"; pros: string[]; cons: string[] }
 > = {
@@ -184,41 +253,87 @@ const METRICS: Record<
   },
 };
 
-function VariantMetricsCard({ variant }: { variant: Variant }) {
-  const m = METRICS[variant];
-  const frictionColor =
-    m.friction === "Baja" ? "#25D366" : m.friction === "Media" ? "#FFAA00" : "#DC2626";
+const VERIFICATION_METRICS: Record<
+  VerificationMethod,
+  { friction: "Baja" | "Media" | "Alta"; pros: string[]; cons: string[] }
+> = {
+  V0: {
+    friction: "Baja",
+    pros: ["Cero fricción extra", "Onboarding más rápido"],
+    cons: ["Sin validación de correo", "Mayor riesgo de datos incorrectos"],
+  },
+  V1: {
+    friction: "Media",
+    pros: ["Correo verificado al instante", "Reduce bounces"],
+    cons: ["Un paso extra en el chat", "Requiere acceso al correo en ese momento"],
+  },
+  V2: {
+    friction: "Baja",
+    pros: ["No interrumpe el flujo", "Verificación cuando el usuario quiera"],
+    cons: ["Correo puede quedar sin verificar", "Envío de emails como deuda técnica"],
+  },
+};
+
+function CombinedMetricsCard({ variant, verificationMethod }: { variant: Variant; verificationMethod: VerificationMethod }) {
+  const vm = VARIANT_METRICS[variant];
+  const vvm = VERIFICATION_METRICS[verificationMethod];
+  const frictionColor = (f: string) =>
+    f === "Baja" ? "#25D366" : f === "Media" ? "#FFAA00" : "#DC2626";
 
   return (
-    <div className="border border-[#E5E5E5] rounded-xl overflow-hidden">
-      <div className="grid grid-cols-3 divide-x divide-[#E5E5E5] bg-[#F5F5F5]">
-        <Stat label="Pasos" value={m.steps} />
-        <Stat label="Toques" value={m.taps} />
-        <div className="flex flex-col items-center justify-center py-3 px-2">
-          <span className="text-[18px] font-bold" style={{ color: frictionColor }}>
-            {m.friction}
-          </span>
-          <span className="text-[10px] text-[#9898A2] font-medium mt-0.5">Fricción</span>
+    <div className="border border-[#E5E5E5] rounded-xl overflow-hidden flex flex-col gap-0">
+      {/* Variante activa */}
+      <div className="px-3 pt-3 pb-1">
+        <p className="text-[10px] font-bold text-[#9898A2] uppercase tracking-wider mb-2">
+          Variante activa
+        </p>
+        <div className="grid grid-cols-3 divide-x divide-[#E5E5E5] bg-[#F5F5F5] rounded-lg mb-2">
+          <Stat label="Pasos" value={vm.steps} />
+          <Stat label="Toques" value={vm.taps} />
+          <div className="flex flex-col items-center justify-center py-2 px-1">
+            <span className="text-[16px] font-bold" style={{ color: frictionColor(vm.friction) }}>
+              {vm.friction}
+            </span>
+            <span className="text-[9px] text-[#9898A2] font-medium mt-0.5">Fricción</span>
+          </div>
         </div>
+        <ProsConsBlock pros={vm.pros} cons={vm.cons} />
       </div>
-      <div className="p-3 flex flex-col gap-2">
-        <div>
-          <p className="text-[10px] font-bold text-[#25D366] uppercase tracking-wider mb-1">Ventajas</p>
-          {m.pros.map((p) => (
-            <p key={p} className="text-[11px] text-[#424552] leading-snug">
-              · {p}
-            </p>
-          ))}
+
+      <div className="h-px bg-[#E5E5E5] mx-3" />
+
+      {/* Verificación activa */}
+      <div className="px-3 pt-2 pb-3">
+        <p className="text-[10px] font-bold text-[#9898A2] uppercase tracking-wider mb-2">
+          Verificación activa
+        </p>
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-[14px] font-bold" style={{ color: frictionColor(vvm.friction) }}>
+            {vvm.friction}
+          </span>
+          <span className="text-[10px] text-[#9898A2]">fricción adicional</span>
         </div>
-        <div>
-          <p className="text-[10px] font-bold text-[#DC2626] uppercase tracking-wider mb-1">Limitaciones</p>
-          {m.cons.map((c) => (
-            <p key={c} className="text-[11px] text-[#424552] leading-snug">
-              · {c}
-            </p>
-          ))}
-        </div>
-        <p className="text-[10px] text-[#9898A2] mt-1">[PLACEHOLDER — validar con Growth/Producto]</p>
+        <ProsConsBlock pros={vvm.pros} cons={vvm.cons} />
+        <p className="text-[10px] text-[#9898A2] mt-2">[PLACEHOLDER — validar con Growth/Producto]</p>
+      </div>
+    </div>
+  );
+}
+
+function ProsConsBlock({ pros, cons }: { pros: string[]; cons: string[] }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div>
+        <p className="text-[9px] font-bold text-[#25D366] uppercase tracking-wider mb-0.5">Ventajas</p>
+        {pros.map((p) => (
+          <p key={p} className="text-[11px] text-[#424552] leading-snug">· {p}</p>
+        ))}
+      </div>
+      <div>
+        <p className="text-[9px] font-bold text-[#DC2626] uppercase tracking-wider mb-0.5">Limitaciones</p>
+        {cons.map((c) => (
+          <p key={c} className="text-[11px] text-[#424552] leading-snug">· {c}</p>
+        ))}
       </div>
     </div>
   );
@@ -226,9 +341,9 @@ function VariantMetricsCard({ variant }: { variant: Variant }) {
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="flex flex-col items-center justify-center py-3 px-2">
-      <span className="text-[20px] font-bold text-[#1C1F2A]">{value}</span>
-      <span className="text-[10px] text-[#9898A2] font-medium mt-0.5">{label}</span>
+    <div className="flex flex-col items-center justify-center py-2 px-1">
+      <span className="text-[18px] font-bold text-[#1C1F2A]">{value}</span>
+      <span className="text-[9px] text-[#9898A2] font-medium mt-0.5">{label}</span>
     </div>
   );
 }

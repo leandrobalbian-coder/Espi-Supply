@@ -35,7 +35,7 @@ export interface ChatState {
   };
   isTyping: boolean;
   awaitingInput: boolean;
-  currentInputTarget: "name" | "email" | null;
+  currentInputTarget: "name" | "email" | "verif_code" | null;
   inputValue: string;
   correctionMode: "name" | "email" | null;
 }
@@ -55,7 +55,7 @@ export const initialState: ChatState = {
 export type ChatAction =
   | { type: "ADD_MESSAGE"; message: ChatMessage }
   | { type: "SET_TYPING"; value: boolean }
-  | { type: "SET_AWAITING_INPUT"; target: "name" | "email" | null }
+  | { type: "SET_AWAITING_INPUT"; target: "name" | "email" | "verif_code" | null }
   | { type: "SET_INPUT_VALUE"; value: string }
   | { type: "SET_PHASE"; phase: ChatState["phase"] }
   | { type: "SET_STEP_INDEX"; index: number }

@@ -1,12 +1,13 @@
 "use client";
-import type { Variant } from "@/lib/flows";
+import type { Variant, VerificationMethod } from "@/lib/flows";
 import WhatsAppChat from "./WhatsAppChat";
 
 interface Props {
   variant: Variant;
+  verificationMethod: VerificationMethod;
 }
 
-export default function PhoneMockup({ variant }: Props) {
+export default function PhoneMockup({ variant, verificationMethod }: Props) {
   return (
     <div className="flex items-center justify-center w-full h-full py-6 px-4">
       {/* Phone shell */}
@@ -42,7 +43,7 @@ export default function PhoneMockup({ variant }: Props) {
 
           {/* Chat */}
           <div className="flex-1 overflow-hidden">
-            <WhatsAppChat key={variant} variant={variant} />
+            <WhatsAppChat key={`${variant}-${verificationMethod}`} variant={variant} verificationMethod={verificationMethod} />
           </div>
         </div>
       </div>

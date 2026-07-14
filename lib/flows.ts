@@ -5,6 +5,7 @@
  */
 
 export type Variant = "A" | "B" | "C";
+export type VerificationMethod = "V0" | "V1" | "V2";
 export type UserProfile = "propietario" | "broker";
 
 export type StepType =
@@ -160,6 +161,53 @@ export const SUCCESS_STEP: Step = {
   content: (ctx) =>
     `¡Listo, ${ctx.name}! Tu cuenta ya está creada 🎉 Entra con tu correo para publicar tu primer espacio.`,
   delay: 1000,
+};
+
+// V2 — el magic link se menciona en el mensaje de éxito (verificación diferida)
+export const SUCCESS_STEP_V2: Step = {
+  id: "success_v2",
+  actor: "bot",
+  type: "success",
+  content: (ctx) =>
+    `¡Listo, ${ctx.name}! Tu cuenta ya está creada 🎉 Te envié un enlace a ${ctx.email} para confirmar tu cuenta cuando entres 🔗 Mientras tanto, ya puedes empezar.`,
+  delay: 1000,
+};
+
+// V1 — pasos de verificación por código OTP (simulado)
+export const V1_ASK_CODE_STEP = (email: string): Step => ({
+  id: "v1_ask_code",
+  actor: "bot",
+  type: "userInput",
+  content: `Para confirmar que es tuyo, te envié un código de 6 dígitos a ${email} 📩 ¿Me lo compartes?`,
+  delay: 900,
+  requiresInput: true,
+});
+
+export const V1_CODE_SUCCESS_STEP: Step = {
+  id: "v1_confirmed",
+  actor: "bot",
+  type: "text",
+  content: "¡Perfecto! Correo confirmado ✓",
+  delay: 600,
+};
+
+export const V1_CODE_WRONG_STEP: Step = {
+  id: "v1_wrong",
+  actor: "bot",
+  type: "quickReply",
+  content: "Ese código no coincide. ¿Lo reintentas?",
+  delay: 600,
+  options: [{ id: "resend_code", label: "Reenviar código" }],
+  requiresInput: true,
+};
+
+export const V1_RESENT_STEP: Step = {
+  id: "v1_resent",
+  actor: "bot",
+  type: "userInput",
+  content: "Listo, te lo mandé de nuevo 📩 ¿Me lo compartes?",
+  delay: 600,
+  requiresInput: true,
 };
 
 // ─── Variante A — Solo botón de confirmación ─────────────────────────────────

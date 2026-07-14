@@ -13,10 +13,16 @@ import {
   VARIANT_C_STEPS,
   ASK_PROFILE_STEP,
   SUCCESS_STEP,
+  SUCCESS_STEP_V2,
   A_RECONFIRM_STEP,
   ASK_EMAIL_CORRECTION_STEP,
   ASK_NAME_CORRECTION_STEP,
+  V1_ASK_CODE_STEP,
+  V1_CODE_SUCCESS_STEP,
+  V1_CODE_WRONG_STEP,
+  V1_RESENT_STEP,
   type Variant,
+  type VerificationMethod,
   type Step,
   type ConversationContext,
 } from "@/lib/flows";
@@ -29,6 +35,7 @@ import PlatformRedirectCard from "./PlatformRedirectCard";
 
 interface Props {
   variant: Variant;
+  verificationMethod: VerificationMethod;
 }
 
 let msgIdCounter = 0;
@@ -38,47 +45,51 @@ function resolveContent(step: Step, ctx: ConversationContext): string {
   return typeof step.content === "function" ? step.content(ctx) : step.content;
 }
 
-export default function WhatsAppChat({ variant }: Props) {
+const DEMO_CODE = "123456";
+
+export default function WhatsAppChat({ variant, verificationMethod }: Props) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const answeredMessages = useRef<Set<string>>(new Set());
   const platformRedirectAnswered = useRef(false);
+  const verificationCallback = useRef<(() => void) | null>(null);
 
   // ─── Auto-scroll ────────────────────────────────────────────────────────────
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [state.messages, state.isTyping]);
 
-  // ─── Reset on variant change (key prop forces full remount, but this guards state) ──
+  // ─── Reset on variant or verificationMethod change ───────────────────────────
   useEffect(() => {
     answeredMessages.current.clear();
     platformRedirectAnswered.current = false;
+    verificationCallback.current = null;
     dispatch({ type: "RESET" });
     msgIdCounter = 0;
-  }, [variant]);
+  }, [variant, verificationMethod]);
 
   // ─── Bot message emitter ─────────────────────────────────────────────────────
   const emitBotMessage = useCallback(
     (step: Step, ctx: ConversationContext, onDone?: () => void) => {
       dispatch({ type: "SET_TYPING", value: true });
-      const delay = step.delay ?? 800;
       setTimeout(() => {
         dispatch({ type: "SET_TYPING", value: false });
-        const msg: ChatMessage = {
-          id: newId(),
-          actor: "bot",
-          type: step.type as ChatMessage["type"],
-          content: resolveContent(step, ctx),
-          options: step.options,
-          fields: step.fields,
-          timestamp: new Date(),
-          ticks: "read",
-        };
-        dispatch({ type: "ADD_MESSAGE", message: msg });
+        dispatch({
+          type: "ADD_MESSAGE",
+          message: {
+            id: newId(),
+            actor: "bot",
+            type: step.type as ChatMessage["type"],
+            content: resolveContent(step, ctx),
+            options: step.options,
+            fields: step.fields,
+            timestamp: new Date(),
+            ticks: "read",
+          },
+        });
         onDone?.();
-      }, delay);
+      }, step.delay ?? 800);
     },
     []
   );
@@ -89,14 +100,7 @@ export default function WhatsAppChat({ variant }: Props) {
       dispatch({ type: "SET_TYPING", value: false });
       dispatch({
         type: "ADD_MESSAGE",
-        message: {
-          id: newId(),
-          actor: "bot",
-          type: "text",
-          content: text,
-          timestamp: new Date(),
-          ticks: "read",
-        },
+        message: { id: newId(), actor: "bot", type: "text", content: text, timestamp: new Date(), ticks: "read" },
       });
     }, 600);
   }, []);
@@ -104,34 +108,58 @@ export default function WhatsAppChat({ variant }: Props) {
   const emitUserMessage = useCallback((content: string) => {
     dispatch({
       type: "ADD_MESSAGE",
-      message: {
-        id: newId(),
-        actor: "user",
-        type: "text",
-        content,
-        timestamp: new Date(),
-        ticks: "read",
-      },
+      message: { id: newId(), actor: "user", type: "text", content, timestamp: new Date(), ticks: "read" },
     });
   }, []);
+
+  // ─── Verification branch (V0/V1/V2) ─────────────────────────────────────────
+  const runVerification = useCallback(
+    (ctx: ConversationContext, onComplete: () => void) => {
+      if (verificationMethod === "V0" || verificationMethod === "V2") {
+        onComplete();
+        return;
+      }
+      // V1 — OTP
+      const askStep = V1_ASK_CODE_STEP(ctx.email);
+      emitBotMessage(askStep, ctx, () => {
+        dispatch({ type: "SET_AWAITING_INPUT", target: "verif_code" });
+        dispatch({ type: "SET_PHASE", phase: "flow" });
+        verificationCallback.current = onComplete;
+      });
+    },
+    [verificationMethod, emitBotMessage]
+  );
+
+  // ─── Proceed to profile (used by all variants after data collection) ──────────
+  const proceedToProfile = useCallback(
+    (ctx: ConversationContext, preStep?: Step) => {
+      const doProfile = () => {
+        emitBotMessage(ASK_PROFILE_STEP, ctx);
+        dispatch({ type: "SET_PHASE", phase: "ask_profile" });
+      };
+      const doVerifyThenProfile = () => runVerification(ctx, doProfile);
+      if (preStep) {
+        emitBotMessage(preStep, ctx, doVerifyThenProfile);
+      } else {
+        doVerifyThenProfile();
+      }
+    },
+    [emitBotMessage, runVerification]
+  );
 
   // ─── Flow orchestrator ───────────────────────────────────────────────────────
   const runVariantFlow = useCallback(
     (ctx: ConversationContext) => {
       const steps =
         variant === "A" ? VARIANT_A_STEPS : variant === "B" ? VARIANT_B_STEPS : VARIANT_C_STEPS;
-
       let stepIdx = 0;
 
       function runStep(currentCtx: ConversationContext) {
         if (stepIdx >= steps.length) {
-          emitBotMessage(ASK_PROFILE_STEP, currentCtx);
-          dispatch({ type: "SET_PHASE", phase: "ask_profile" });
-          dispatch({ type: "SET_CONTEXT", context: currentCtx });
+          proceedToProfile(currentCtx);
           return;
         }
         const step = steps[stepIdx];
-
         if (step.type === "userInput") {
           emitBotMessage(step, currentCtx, () => {
             const target = stepIdx === 0 ? "name" : "email";
@@ -142,7 +170,6 @@ export default function WhatsAppChat({ variant }: Props) {
           });
           return;
         }
-
         if (step.type === "form") {
           emitBotMessage(step, currentCtx);
           dispatch({ type: "SET_PHASE", phase: "flow" });
@@ -150,7 +177,6 @@ export default function WhatsAppChat({ variant }: Props) {
           dispatch({ type: "SET_CONTEXT", context: currentCtx });
           return;
         }
-
         if (step.type === "platformRedirect") {
           emitBotMessage(step, currentCtx);
           dispatch({ type: "SET_PHASE", phase: "flow" });
@@ -158,7 +184,6 @@ export default function WhatsAppChat({ variant }: Props) {
           dispatch({ type: "SET_CONTEXT", context: currentCtx });
           return;
         }
-
         if (step.type === "quickReply" && step.id === "a_confirm") {
           emitBotMessage(step, currentCtx);
           dispatch({ type: "SET_PHASE", phase: "flow" });
@@ -166,22 +191,20 @@ export default function WhatsAppChat({ variant }: Props) {
           dispatch({ type: "SET_CONTEXT", context: currentCtx });
           return;
         }
-
-        emitBotMessage(step, currentCtx, () => {
-          stepIdx++;
-          runStep(currentCtx);
-        });
+        emitBotMessage(step, currentCtx, () => { stepIdx++; runStep(currentCtx); });
       }
 
       runStep(ctx);
     },
-    [variant, emitBotMessage]
+    [variant, emitBotMessage, proceedToProfile]
   );
 
+  // ─── Success ──────────────────────────────────────────────────────────────────
   const runSuccess = useCallback(
     (ctx: ConversationContext) => {
       const profile = ctx.profile ?? "propietario";
-      emitBotMessage(SUCCESS_STEP, ctx, () => {
+      const successStep = verificationMethod === "V2" ? SUCCESS_STEP_V2 : SUCCESS_STEP;
+      emitBotMessage(successStep, ctx, () => {
         const welcomeMsg: ChatMessage = {
           id: newId(),
           actor: "bot",
@@ -198,31 +221,28 @@ export default function WhatsAppChat({ variant }: Props) {
       });
       dispatch({ type: "SET_PHASE", phase: "success" });
     },
-    [emitBotMessage]
+    [emitBotMessage, verificationMethod]
   );
 
   // ─── Start conversation on mount ─────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
-
     function safeTimeout(fn: () => void, ms: number) {
       const id = setTimeout(() => { if (!cancelled) fn(); }, ms);
       timers.push(id);
     }
-
     function cancelAll() {
       cancelled = true;
       timers.forEach(clearTimeout);
       dispatch({ type: "RESET" });
       answeredMessages.current.clear();
       platformRedirectAnswered.current = false;
+      verificationCallback.current = null;
       msgIdCounter = 0;
     }
-
     let i = 0;
     const ctx = { name: "", email: "", profile: null };
-
     function runOpening() {
       if (cancelled || i >= OPENING_STEPS.length) return;
       const step = OPENING_STEPS[i];
@@ -244,70 +264,52 @@ export default function WhatsAppChat({ variant }: Props) {
         });
         if (step.requiresInput) {
           dispatch({ type: "SET_PHASE", phase: "opening" });
-        } else {
-          i++;
-          runOpening();
-        }
+        } else { i++; runOpening(); }
       }, step.delay ?? 800);
     }
-
     safeTimeout(runOpening, 400);
     return cancelAll;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variant]);
+  }, [variant, verificationMethod]);
 
   // ─── Quick reply handler ──────────────────────────────────────────────────────
   function handleQuickReply(msgId: string, optId: string, optLabel: string) {
     if (answeredMessages.current.has(msgId)) return;
     answeredMessages.current.add(msgId);
-
     emitUserMessage(optLabel);
     const ctx = state.context;
 
     if (state.phase === "opening") {
-      if (optId === "start") {
-        runVariantFlow(ctx);
-      } else if (optId === "whatis") {
-        dispatch({ type: "SET_PHASE", phase: "whatis" });
-        emitBotMessage(WHATIS_BRANCH_STEPS[0], ctx);
-      } else if (optId === "later") {
-        emitBotMessage(LATER_STEP, ctx);
-        dispatch({ type: "SET_PHASE", phase: "bye" });
-      }
+      if (optId === "start") { runVariantFlow(ctx); }
+      else if (optId === "whatis") { dispatch({ type: "SET_PHASE", phase: "whatis" }); emitBotMessage(WHATIS_BRANCH_STEPS[0], ctx); }
+      else if (optId === "later") { emitBotMessage(LATER_STEP, ctx); dispatch({ type: "SET_PHASE", phase: "bye" }); }
       return;
     }
 
     if (state.phase === "whatis") {
-      if (optId === "start") {
-        runVariantFlow(ctx);
-      } else {
-        emitBotMessage(LATER_STEP, ctx);
-        dispatch({ type: "SET_PHASE", phase: "bye" });
-      }
+      if (optId === "start") { runVariantFlow(ctx); }
+      else { emitBotMessage(LATER_STEP, ctx); dispatch({ type: "SET_PHASE", phase: "bye" }); }
       return;
     }
 
     if (state.phase === "flow") {
       if (optId === "confirm") {
-        // "Sí, crear" — avanzar a crear cuenta
         const creatingStep = VARIANT_A_STEPS.find((s) => s.id === "a_creating");
-        if (creatingStep) {
-          emitBotMessage(creatingStep, ctx, () => {
-            emitBotMessage(ASK_PROFILE_STEP, ctx);
-            dispatch({ type: "SET_PHASE", phase: "ask_profile" });
-          });
-        }
+        proceedToProfile(ctx, creatingStep);
       } else if (optId === "edit_email") {
-        // Corrección granular: solo pide el correo, mantiene el nombre
         emitBotMessage(ASK_EMAIL_CORRECTION_STEP, ctx, () => {
           dispatch({ type: "SET_AWAITING_INPUT", target: "email" });
           dispatch({ type: "SET_CORRECTION_MODE", mode: "email" });
         });
       } else if (optId === "edit_name") {
-        // Corrección granular: solo pide el nombre, mantiene el correo
         emitBotMessage(ASK_NAME_CORRECTION_STEP, ctx, () => {
           dispatch({ type: "SET_AWAITING_INPUT", target: "name" });
           dispatch({ type: "SET_CORRECTION_MODE", mode: "name" });
+        });
+      } else if (optId === "resend_code") {
+        // V1 — reenviar OTP
+        emitBotMessage(V1_RESENT_STEP, ctx, () => {
+          dispatch({ type: "SET_AWAITING_INPUT", target: "verif_code" });
         });
       }
       return;
@@ -315,9 +317,8 @@ export default function WhatsAppChat({ variant }: Props) {
 
     if (state.phase === "ask_profile") {
       const profile = optId as UserProfile;
-      const newCtx = { ...ctx, profile };
       dispatch({ type: "SET_CONTEXT", context: { profile } });
-      runSuccess(newCtx);
+      runSuccess({ ...ctx, profile });
     }
   }
 
@@ -326,26 +327,38 @@ export default function WhatsAppChat({ variant }: Props) {
     const val = state.inputValue.trim();
     if (!val) return;
 
+    // V1 — OTP code input
+    if (state.currentInputTarget === "verif_code") {
+      emitUserMessage(val);
+      dispatch({ type: "SET_INPUT_VALUE", value: "" });
+      dispatch({ type: "SET_AWAITING_INPUT", target: null });
+      if (val === DEMO_CODE) {
+        emitBotMessage(V1_CODE_SUCCESS_STEP, state.context, () => {
+          verificationCallback.current?.();
+          verificationCallback.current = null;
+        });
+      } else {
+        emitBotMessage(V1_CODE_WRONG_STEP, state.context);
+      }
+      return;
+    }
+
     // Validar correo antes de aceptar
     if (state.currentInputTarget === "email" && !isValidEmail(val)) {
       emitUserMessage(val);
       dispatch({ type: "SET_INPUT_VALUE", value: "" });
-      emitBotError(
-        "Mmm, ese correo no se ve completo. ¿Lo revisas? Debe verse como nombre@dominio.com"
-      );
-      // Mantenemos awaitingInput: true y currentInputTarget: "email" — no avanzamos
+      emitBotError("Mmm, ese correo no se ve completo. ¿Lo revisas? Debe verse como nombre@dominio.com");
       return;
     }
 
     emitUserMessage(val);
     dispatch({ type: "SET_INPUT_VALUE", value: "" });
-
     const target = state.currentInputTarget;
     const newCtx = { ...state.context, [target ?? "name"]: val };
     dispatch({ type: "SET_CONTEXT", context: { [target ?? "name"]: val } });
     dispatch({ type: "SET_AWAITING_INPUT", target: null });
 
-    // Si venimos de una corrección granular → re-confirmar sin reset
+    // Corrección granular → re-confirmar
     if (state.correctionMode !== null) {
       dispatch({ type: "SET_CORRECTION_MODE", mode: null });
       emitBotMessage(A_RECONFIRM_STEP, newCtx);
@@ -353,14 +366,13 @@ export default function WhatsAppChat({ variant }: Props) {
       return;
     }
 
-    // Flujo normal — avanzar al siguiente paso
+    // Flujo normal
     const steps =
       variant === "A" ? VARIANT_A_STEPS : variant === "B" ? VARIANT_B_STEPS : VARIANT_C_STEPS;
     const nextStepIdx = state.stepIndex + 1;
 
     if (nextStepIdx < steps.length) {
       const next = steps[nextStepIdx];
-
       if (next.type === "userInput") {
         emitBotMessage(next, newCtx, () => {
           const nextTarget = nextStepIdx === 0 ? "name" : "email";
@@ -371,7 +383,6 @@ export default function WhatsAppChat({ variant }: Props) {
         emitBotMessage(next, newCtx);
         dispatch({ type: "SET_STEP_INDEX", index: nextStepIdx });
       } else if (next.type === "platformRedirect") {
-        // Mostrar card y esperar — no avanzar automáticamente
         emitBotMessage(next, newCtx);
         dispatch({ type: "SET_PHASE", phase: "flow" });
         dispatch({ type: "SET_STEP_INDEX", index: nextStepIdx });
@@ -379,62 +390,58 @@ export default function WhatsAppChat({ variant }: Props) {
       } else {
         emitBotMessage(next, newCtx, () => {
           const afterIdx = nextStepIdx + 1;
-          if (afterIdx < steps.length) {
-            const afterStep = steps[afterIdx];
-            if (afterStep.type === "userInput") {
-              emitBotMessage(afterStep, newCtx, () => {
-                dispatch({ type: "SET_AWAITING_INPUT", target: "email" });
-                dispatch({ type: "SET_STEP_INDEX", index: afterIdx });
-              });
-            }
+          if (afterIdx < steps.length && steps[afterIdx].type === "userInput") {
+            emitBotMessage(steps[afterIdx], newCtx, () => {
+              dispatch({ type: "SET_AWAITING_INPUT", target: "email" });
+              dispatch({ type: "SET_STEP_INDEX", index: afterIdx });
+            });
           } else {
-            emitBotMessage(ASK_PROFILE_STEP, newCtx);
-            dispatch({ type: "SET_PHASE", phase: "ask_profile" });
+            proceedToProfile(newCtx);
           }
         });
       }
     } else {
-      emitBotMessage(ASK_PROFILE_STEP, newCtx);
-      dispatch({ type: "SET_PHASE", phase: "ask_profile" });
+      proceedToProfile(newCtx);
     }
   }
 
   function handleFormSubmit(values: Record<string, string>) {
     const name = values["name"] ?? "";
     const email = values["email"] ?? "";
-
     emitUserMessage(`${name} · ${email}`);
-
     const newCtx = { ...state.context, name, email };
     dispatch({ type: "SET_CONTEXT", context: { name, email } });
-
     const receivedStep = VARIANT_B_STEPS.find((s) => s.id === "b_received");
-    if (receivedStep) {
-      emitBotMessage(receivedStep, newCtx, () => {
-        emitBotMessage(ASK_PROFILE_STEP, newCtx);
-        dispatch({ type: "SET_PHASE", phase: "ask_profile" });
-      });
-    }
+    proceedToProfile(newCtx, receivedStep);
   }
 
   function handlePlatformConfirm() {
     if (platformRedirectAnswered.current) return;
     platformRedirectAnswered.current = true;
-
     emitUserMessage("Confirmado ✓");
-    const newCtx = state.context;
-    emitBotMessage(
-      { id: "c_confirmed", actor: "bot", type: "typing", content: "Confirmado. Creando tu cuenta…", delay: 500, auto: true },
-      newCtx,
-      () => {
-        emitBotMessage(ASK_PROFILE_STEP, newCtx);
-        dispatch({ type: "SET_PHASE", phase: "ask_profile" });
-      }
-    );
+    const confirmedStep: Step = {
+      id: "c_confirmed",
+      actor: "bot",
+      type: "typing",
+      content: "Confirmado. Creando tu cuenta…",
+      delay: 500,
+      auto: true,
+    };
+    proceedToProfile(state.context, confirmedStep);
   }
 
   const isDone = state.phase === "done" || state.phase === "bye";
   const showInput = state.awaitingInput && !isDone;
+
+  const inputPlaceholder =
+    state.currentInputTarget === "verif_code"
+      ? "Escribe el código de 6 dígitos…"
+      : state.currentInputTarget === "name"
+        ? "Escribe tu nombre…"
+        : "Escribe tu correo…";
+
+  const inputType =
+    state.currentInputTarget === "email" ? "email" : "text";
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -516,13 +523,7 @@ export default function WhatsAppChat({ variant }: Props) {
                       href={opt.id}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="
-                        block w-full text-center py-3 rounded-full bg-[#FFAA00] text-[#1C1F2A]
-                        text-[14px] font-bold hover:bg-[#E69900]
-                        transition-all duration-150
-                        focus:outline-none focus:ring-2 focus:ring-[#FFAA00]/40
-                        min-h-[44px] flex items-center justify-center
-                      "
+                      className="block w-full text-center py-3 rounded-full bg-[#FFAA00] text-[#1C1F2A] text-[14px] font-bold hover:bg-[#E69900] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-[#FFAA00]/40 min-h-[44px] flex items-center justify-center"
                     >
                       {opt.label}
                     </a>
@@ -544,30 +545,18 @@ export default function WhatsAppChat({ variant }: Props) {
         {showInput ? (
           <div className="flex items-center gap-2">
             <input
-              ref={inputRef}
-              type={state.currentInputTarget === "email" ? "email" : "text"}
-              placeholder={state.currentInputTarget === "name" ? "Escribe tu nombre…" : "Escribe tu correo…"}
+              type={inputType}
+              placeholder={inputPlaceholder}
               value={state.inputValue}
               onChange={(e) => dispatch({ type: "SET_INPUT_VALUE", value: e.target.value })}
               onKeyDown={(e) => e.key === "Enter" && handleTextInput()}
               autoFocus
-              className="
-                flex-1 bg-white rounded-full px-4 py-2.5
-                text-[14px] text-[#1C1F2A] placeholder:text-[#9898A2]
-                border border-[#E5E5E5]
-                focus:outline-none focus:border-[#FFAA00] focus:ring-2 focus:ring-[#FFAA00]/20
-                min-h-[44px]
-              "
+              className="flex-1 bg-white rounded-full px-4 py-2.5 text-[14px] text-[#1C1F2A] placeholder:text-[#9898A2] border border-[#E5E5E5] focus:outline-none focus:border-[#FFAA00] focus:ring-2 focus:ring-[#FFAA00]/20 min-h-[44px]"
             />
             <button
               onClick={handleTextInput}
               disabled={!state.inputValue.trim()}
-              className="
-                w-11 h-11 rounded-full bg-[#FFAA00] flex items-center justify-center flex-shrink-0
-                hover:bg-[#E69900] transition-all duration-150
-                disabled:opacity-40 disabled:pointer-events-none
-                focus:outline-none focus:ring-2 focus:ring-[#FFAA00]/40
-              "
+              className="w-11 h-11 rounded-full bg-[#FFAA00] flex items-center justify-center flex-shrink-0 hover:bg-[#E69900] transition-all duration-150 disabled:opacity-40 disabled:pointer-events-none focus:outline-none focus:ring-2 focus:ring-[#FFAA00]/40"
               aria-label="Enviar"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1C1F2A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
