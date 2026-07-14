@@ -309,6 +309,119 @@ export const TONED_COPY: Record<string, Record<Tone, CopyValue>> = {
     neutro:  "¿Cómo podemos continuar?",
     directo: "¿Qué sigue?",
   },
+
+  // ─── Fricción: dato desconocido ───────────────────────────────────────────────
+  // Cálido: normaliza la situación, le quita la presión al usuario.
+  // Neutro: informa la opción sin validar emocionalmente.
+  // Directo: da la solución en dos palabras, sin contexto.
+
+  dont_know_size: {
+    calido:  "¡No te preocupes si no lo sabes de memoria! Ponés un aproximado — o si preferís, escribí 0 y lo editás directo en la plataforma cuando entres.",
+    neutro:  "Si no tienes el dato exacto, puedes ingresar un aproximado. También puedes escribir 0 y completarlo en la plataforma.",
+    directo: "Aproximado está bien. O escribí 0 y lo editás en Spot2.",
+  },
+
+  dont_know_price: {
+    calido:  "No necesitás tenerlo definido al 100% ahora. Ponés un precio tentativo y lo ajustás antes de publicar. ¿Cuánto pensás cobrar aproximadamente?",
+    neutro:  "Puedes ingresar un precio tentativo. Se puede modificar antes de publicar en la plataforma.",
+    directo: "Precio tentativo está bien. ¿Cuánto aproximado?",
+  },
+
+  // ─── Fricción: dato numérico inválido — escalada en 3 intentos ───────────────
+  // Intento 1: amable, ejemplo claro.
+  // Intento 2: más explícito, refuerza el formato, aún paciente.
+  // Intento 3: ofrece salida sin culpar al usuario — puede escribir 0 o ir a Spot2.
+  //
+  // Diferencia de tonos:
+  //   Cálido — usa "no pasa nada", normaliza el error, acompaña emocionalmente.
+  //   Neutro — directo a la instrucción, sin emociones, pero sin frialdad.
+  //   Directo — una línea, sin explicación, solo la corrección o la salida.
+
+  size_invalid_1: {
+    calido:  "Mmm, necesito solo el número de metros. Por ejemplo: 250 (sin m² ni letras) 😊",
+    neutro:  "Ingresa solo el número en metros cuadrados. Ej: 250",
+    directo: "Solo el número. Ej: 250",
+  },
+
+  size_invalid_2: {
+    calido:  "El número puro, sin texto — como 350 o 120. ¿Lo intentamos de nuevo?",
+    neutro:  "Solo dígitos, sin letras ni símbolos. Ej: 350",
+    directo: "Sin letras. Ej: 350",
+  },
+
+  size_invalid_3: {
+    calido:  "No pasa nada 😊 Si es más fácil, escribí 0 y completás los metros cuadrados directo en Spot2 cuando entres.",
+    neutro:  "Puedes escribir 0 por ahora y completar el dato en la plataforma.",
+    directo: "Escribí 0, lo editás en Spot2.",
+  },
+
+  price_invalid_1: {
+    calido:  "El precio lo necesito en número puro. Por ejemplo: 25000 (sin $ ni comas ni letras)",
+    neutro:  "Ingresa solo el número del precio mensual. Ej: 25000",
+    directo: "Solo números. Ej: 25000",
+  },
+
+  price_invalid_2: {
+    calido:  "Solo el número, como 15000 o 80000. Sin símbolos ni texto. ¿Lo intentás de nuevo?",
+    neutro:  "Solo dígitos, sin formato. Ej: 15000",
+    directo: "Sin formato. Ej: 15000",
+  },
+
+  price_invalid_3: {
+    calido:  "No problem 😊 Escribí 0 por ahora y ajustás el precio en la plataforma antes de publicar.",
+    neutro:  "Puedes escribir 0 y completar el precio en Spot2.",
+    directo: "Escribí 0, lo editás allá.",
+  },
+
+  // ─── Fricción: usuario frustrado o cortante ───────────────────────────────────
+  // Cálido: valida la emoción primero, luego acorta el camino.
+  //         "Entiendo" + empathy antes de la solución.
+  // Neutro: reconoce sin dramatizar, ofrece la vía más corta sin opinar sobre el estado.
+  // Directo: ignora la emoción, va directo a la salida más rápida.
+
+  frustration_onboarding: {
+    calido:  "Entiendo, a veces puede parecer largo 😔 Podemos hacer esto mucho más corto: dame solo tu correo y te mando directo a Spot2 para terminar en 30 segundos.",
+    neutro:  "Para agilizarlo: comparte solo tu correo y te enviamos a Spot2 para completar el registro rápidamente.",
+    directo: "Dame tu correo y terminás en Spot2.",
+  },
+
+  frustration_publish: {
+    calido:  "Entiendo, no quiero que se sienta como un trámite 😔 Podemos ir más rápido: seguís directo en Spot2 y cargás los datos allá desde cero en 2 minutos.",
+    neutro:  "Para agilizarlo: puedes completar la publicación directamente en Spot2. Te llevará menos tiempo.",
+    directo: "Continuamos en Spot2. ¿Vamos?",
+  },
+
+  // ─── Fricción: usuario desconfía ─────────────────────────────────────────────
+  // Cálido: calidez + transparencia + invita a conocer más.
+  //         "Me alegra que lo preguntes" — convierte la pregunta en algo positivo.
+  // Neutro: respuesta factual, sober, datos concretos sin persuasión.
+  // Directo: responde solo lo preguntado, una oración.
+
+  trust_question: {
+    calido:  "Buenísima pregunta, y me alegra que lo preguntes 🔒 Este número es oficial de Spot2 — el marketplace #1 de bienes raíces comerciales en México. Tus datos solo se usan para crear tu cuenta y nunca se comparten con terceros. ¿Te cuento más sobre Spot2?",
+    neutro:  "Este número pertenece a Spot2, el marketplace líder de bienes raíces comerciales en México. Tus datos se usan únicamente para crear tu cuenta y están protegidos. ¿Deseas saber más sobre Spot2?",
+    directo: "Número oficial Spot2.mx. Tus datos solo crean tu cuenta. ¿Qué es Spot2?",
+  },
+
+  // ─── Fricción: usuario retoma a mitad ────────────────────────────────────────
+  // Se activa cuando el usuario saluda o manda algo inesperado teniendo ya
+  // nombre en contexto — señal de que dejó la conversación y volvió.
+  //
+  // Cálido: bienvenida cálida + retoma el contexto con nombre + da el siguiente paso.
+  // Neutro: retoma el punto exacto sin ceremony, informativo.
+  // Directo: brevísimo, solo el siguiente dato que falta.
+
+  resume_with_name_no_email: {
+    calido:  (ctx) => `¡Hola de nuevo, ${ctx.name}! 👋 Seguimos donde lo dejamos — solo falta tu correo para crear tu cuenta. ¿Cuál es?`,
+    neutro:  (ctx) => `Bienvenido de nuevo, ${ctx.name}. Continuamos: falta tu correo electrónico para crear tu cuenta.`,
+    directo: (ctx) => `Seguimos, ${ctx.name}. ¿Tu correo?`,
+  },
+
+  resume_with_email: {
+    calido:  (ctx) => `¡Hola de nuevo, ${ctx.name}! 👋 Ya tenía tu correo (${ctx.email}). Seguimos desde donde lo dejamos.`,
+    neutro:  (ctx) => `Bienvenido de nuevo, ${ctx.name}. Continuamos — ya tenemos tu correo (${ctx.email}).`,
+    directo: (ctx) => `Seguimos, ${ctx.name}. Correo ya guardado.`,
+  },
 };
 
 export function getCopy(key: string, tone: Tone, ctx: ConversationContext): string {

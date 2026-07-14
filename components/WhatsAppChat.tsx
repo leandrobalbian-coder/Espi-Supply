@@ -66,6 +66,8 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
   const platformRedirectAnswered = useRef(false);
   const photosCompletedMessages = useRef<Set<string>>(new Set());
   const verificationCallback = useRef<(() => void) | null>(null);
+  // Cuenta intentos inválidos por campo (sin tocar el reducer)
+  const invalidAttempts = useRef<Record<string, number>>({});
 
   // ─── Auto-scroll ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -78,6 +80,7 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     platformRedirectAnswered.current = false;
     photosCompletedMessages.current.clear();
     verificationCallback.current = null;
+    invalidAttempts.current = {};
     dispatch({ type: "RESET" });
     msgIdCounter = 0;
   }, [variant, verificationMethod, startMode]);
@@ -465,6 +468,24 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     dispatch({ type: "SET_STEP_INDEX", index: confirmIdx });
   }
 
+  // ─── Detección de fricción ────────────────────────────────────────────────────
+
+  function isUnknownData(val: string) {
+    return /^(no sé|no lo sé|nse|ns|no tengo|no lo tengo|no recuerdo|no lo recuerdo|desconozco|no lo conozco|no lo tenemos|no me acuerdo|no sé exacto|no sé bien|\?+|no idea|ni idea|no aplica|n\/a)$/i.test(val.trim());
+  }
+
+  function isFrustrated(val: string) {
+    return /ya olvídalo|olvídalo|olvidalo|ya no quiero|es muy largo|muy largo|tarda mucho|no funciona|no sirve|para qué|para que hago esto|basta ya|basta|me rindo|déjalo|dejalo|ya me cansé|me cansé|esto no funciona|no me interesa ya|cancela|ya no|déjame en paz|dejame en paz/i.test(val);
+  }
+
+  function isTrustQuestion(val: string) {
+    return /es (esto )?seguro|¿seguro|quién eres|quien eres|por qué tienes (mi|este)|por que tienes (mi|este)|mi número|mi correo (para qué|para que)|para qué quieres (mis datos|el correo|mi)|para que quieres (mis datos|el correo|mi)|no confío|no confio|eres real|es real esto|eres un bot|eres bot|quién es espi|quien es espi/i.test(val);
+  }
+
+  function isReturningGreeting(val: string) {
+    return /^(hola|buenas|hey|sigues ahí|sigues ahi|estás ahí|estas ahí|oye|oiga|oi|hi|¿sigues ahí\??|¿hola\??)$/i.test(val.trim());
+  }
+
   // ─── Text input handler ───────────────────────────────────────────────────────
   function handleTextInput() {
     const val = state.inputValue.trim();
@@ -488,18 +509,48 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
 
     // Publish flow — m²
     if (state.phase === "publish_size") {
+      // "No sé" — ofrece aproximado o placeholder
+      if (isUnknownData(val)) {
+        emitUserMessage(val);
+        dispatch({ type: "SET_INPUT_VALUE", value: "" });
+        emitBotError(getCopy("dont_know_size", tone, state.context));
+        return;
+      }
+      // Frustración / desconfianza tienen prioridad sobre validación numérica
+      if (isTrustQuestion(val)) {
+        emitUserMessage(val);
+        dispatch({ type: "SET_INPUT_VALUE", value: "" });
+        emitBotError(getCopy("trust_question", tone, state.context));
+        return;
+      }
+      if (isFrustrated(val)) {
+        emitUserMessage(val);
+        dispatch({ type: "SET_INPUT_VALUE", value: "" });
+        emitBotError(getCopy("frustration_publish", tone, state.context));
+        return;
+      }
+      // Validación numérica con escalada de 3 intentos
+      if (!/^\d+([.,]\d+)?$/.test(val)) {
+        emitUserMessage(val);
+        dispatch({ type: "SET_INPUT_VALUE", value: "" });
+        const attempts = (invalidAttempts.current["size"] ?? 0) + 1;
+        invalidAttempts.current["size"] = attempts;
+        const key = attempts >= 3 ? "size_invalid_3" : attempts === 2 ? "size_invalid_2" : "size_invalid_1";
+        emitBotError(getCopy(key, tone, state.context));
+        return;
+      }
+      // Input válido — limpiar contador
+      invalidAttempts.current["size"] = 0;
       emitUserMessage(val);
       dispatch({ type: "SET_INPUT_VALUE", value: "" });
       dispatch({ type: "SET_AWAITING_INPUT", target: null });
       const newCtx = { ...state.context, spaceSize: val };
       dispatch({ type: "SET_CONTEXT", context: { spaceSize: val } });
       if (variant === "C") {
-        // Variante C: tras m², redirige a la plataforma con borrador pre-cargado
         const redirectStep = PUBLISH_VARIANT_C_STEPS.find((s) => s.id === "publish_redirect_c")!;
         emitBotMessage(redirectStep, newCtx);
         dispatch({ type: "SET_PHASE", phase: "publish_redirect_c" });
       } else {
-        // Variante A: continúa con precio
         const priceStep = PUBLISH_VARIANT_A_STEPS.find((s) => s.id === "publish_price")!;
         const priceIdx  = PUBLISH_VARIANT_A_STEPS.findIndex((s) => s.id === "publish_price");
         emitBotMessage(priceStep, newCtx, () => {
@@ -513,6 +564,37 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
 
     // Publish flow — precio (variante A)
     if (state.phase === "publish_price") {
+      // "No sé" — ofrece precio tentativo
+      if (isUnknownData(val)) {
+        emitUserMessage(val);
+        dispatch({ type: "SET_INPUT_VALUE", value: "" });
+        emitBotError(getCopy("dont_know_price", tone, state.context));
+        return;
+      }
+      // Frustración / desconfianza tienen prioridad sobre validación numérica
+      if (isTrustQuestion(val)) {
+        emitUserMessage(val);
+        dispatch({ type: "SET_INPUT_VALUE", value: "" });
+        emitBotError(getCopy("trust_question", tone, state.context));
+        return;
+      }
+      if (isFrustrated(val)) {
+        emitUserMessage(val);
+        dispatch({ type: "SET_INPUT_VALUE", value: "" });
+        emitBotError(getCopy("frustration_publish", tone, state.context));
+        return;
+      }
+      // Validación numérica con escalada
+      if (!/^\d+([.,]\d+)?$/.test(val)) {
+        emitUserMessage(val);
+        dispatch({ type: "SET_INPUT_VALUE", value: "" });
+        const attempts = (invalidAttempts.current["price"] ?? 0) + 1;
+        invalidAttempts.current["price"] = attempts;
+        const key = attempts >= 3 ? "price_invalid_3" : attempts === 2 ? "price_invalid_2" : "price_invalid_1";
+        emitBotError(getCopy(key, tone, state.context));
+        return;
+      }
+      invalidAttempts.current["price"] = 0;
       emitUserMessage(val);
       dispatch({ type: "SET_INPUT_VALUE", value: "" });
       dispatch({ type: "SET_AWAITING_INPUT", target: null });
@@ -523,6 +605,36 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
       emitBotMessage(addressStep, newCtx);
       dispatch({ type: "SET_PHASE", phase: "publish_address" });
       dispatch({ type: "SET_STEP_INDEX", index: addressIdx });
+      return;
+    }
+
+    // Detección de desconfianza (cualquier input de texto libre)
+    if (isTrustQuestion(val)) {
+      emitUserMessage(val);
+      dispatch({ type: "SET_INPUT_VALUE", value: "" });
+      emitBotError(getCopy("trust_question", tone, state.context));
+      return;
+    }
+
+    // Detección de frustración
+    if (isFrustrated(val)) {
+      emitUserMessage(val);
+      dispatch({ type: "SET_INPUT_VALUE", value: "" });
+      const frustKey = startMode === "publish_space" ? "frustration_publish" : "frustration_onboarding";
+      emitBotError(getCopy(frustKey, tone, state.context));
+      return;
+    }
+
+    // Detección de retomada (saludo inesperado con contexto ya parcialmente cargado)
+    if (isReturningGreeting(val) && state.context.name) {
+      emitUserMessage(val);
+      dispatch({ type: "SET_INPUT_VALUE", value: "" });
+      const resumeKey = state.context.email ? "resume_with_email" : "resume_with_name_no_email";
+      emitBotError(getCopy(resumeKey, tone, state.context));
+      // Re-activar el input target correcto
+      if (!state.context.email) {
+        dispatch({ type: "SET_AWAITING_INPUT", target: "email" });
+      }
       return;
     }
 
@@ -712,7 +824,6 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
 
   const inputType =
     state.currentInputTarget === "email" ? "email"
-    : state.currentInputTarget === "size" || state.currentInputTarget === "price" ? "number"
     : "text";
 
   const isPublishFormPhase = state.phase === "publish_address" || state.phase === "publish_form_b";
