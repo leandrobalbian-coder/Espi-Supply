@@ -37,6 +37,7 @@ export interface ChatState {
   awaitingInput: boolean;
   currentInputTarget: "name" | "email" | null;
   inputValue: string;
+  correctionMode: "name" | "email" | null;
 }
 
 export const initialState: ChatState = {
@@ -48,6 +49,7 @@ export const initialState: ChatState = {
   awaitingInput: false,
   currentInputTarget: null,
   inputValue: "",
+  correctionMode: null,
 };
 
 export type ChatAction =
@@ -58,6 +60,7 @@ export type ChatAction =
   | { type: "SET_PHASE"; phase: ChatState["phase"] }
   | { type: "SET_STEP_INDEX"; index: number }
   | { type: "SET_CONTEXT"; context: Partial<ChatState["context"]> }
+  | { type: "SET_CORRECTION_MODE"; mode: "name" | "email" | null }
   | { type: "RESET" };
 
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
@@ -76,6 +79,8 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return { ...state, stepIndex: action.index };
     case "SET_CONTEXT":
       return { ...state, context: { ...state.context, ...action.context } };
+    case "SET_CORRECTION_MODE":
+      return { ...state, correctionMode: action.mode };
     case "RESET":
       return { ...initialState };
     default:

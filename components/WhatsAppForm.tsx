@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import { isValidEmail } from "@/lib/validation";
 
 interface Field {
   id: string;
@@ -24,7 +25,7 @@ export default function WhatsAppForm({ fields, onSubmit, disabled }: Props) {
     const errs: Record<string, string> = {};
     fields.forEach((f) => {
       if (!values[f.id]?.trim()) errs[f.id] = "Campo requerido";
-      if (f.type === "email" && values[f.id] && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values[f.id])) {
+      if (f.type === "email" && values[f.id] && !isValidEmail(values[f.id])) {
         errs[f.id] = "Ingresa un correo válido";
       }
     });

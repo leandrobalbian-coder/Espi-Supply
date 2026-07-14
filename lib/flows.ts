@@ -88,7 +88,7 @@ export const WHATIS_BRANCH_STEPS: Step[] = [
       "Spot2 es el marketplace #1 de bienes raíces comerciales en México. Conectamos a propietarios y brokers con empresas que buscan oficinas, bodegas, locales y más.",
     delay: 800,
     options: [
-      { id: "start", label: "Quiero crear mi cuenta" },
+      { id: "start", label: "Crear mi cuenta" }, // era 22 chars "Quiero crear mi cuenta"
       { id: "later", label: "Quizás después" },
     ],
     requiresInput: true,
@@ -112,9 +112,44 @@ export const ASK_PROFILE_STEP: Step = {
   content: (ctx) => `Casi listo, ${ctx.name}. ¿Cómo describes mejor tu perfil?`,
   delay: 800,
   options: [
-    { id: "propietario", label: "Propietario de espacios" },
-    { id: "broker", label: "Broker / Asesor" },
+    { id: "propietario", label: "Soy propietario" }, // era 23 chars
+    { id: "broker", label: "Soy broker" },           // era 15 chars (ya ok, uniformidad)
   ],
+  requiresInput: true,
+};
+
+// Paso de re-confirmación tras corrección granular (Nielsen H1 — feedback de cambio)
+export const A_RECONFIRM_STEP: Step = {
+  id: "a_reconfirm",
+  actor: "bot",
+  type: "quickReply",
+  content: (ctx) =>
+    `Perfecto, actualicé tus datos:\n• Nombre: ${ctx.name}\n• Correo: ${ctx.email}\n\n¿Todo bien ahora?`,
+  delay: 700,
+  options: [
+    { id: "confirm", label: "Sí, crear" },
+    { id: "edit_email", label: "Corregir correo" },
+    { id: "edit_name", label: "Corregir nombre" },
+  ],
+  requiresInput: true,
+};
+
+// Pasos de solicitud de corrección (usados inline en WhatsAppChat)
+export const ASK_EMAIL_CORRECTION_STEP: Step = {
+  id: "ask_email_correction",
+  actor: "bot",
+  type: "userInput",
+  content: "¿Cuál es el correo correcto?",
+  delay: 600,
+  requiresInput: true,
+};
+
+export const ASK_NAME_CORRECTION_STEP: Step = {
+  id: "ask_name_correction",
+  actor: "bot",
+  type: "userInput",
+  content: "¿Cómo es tu nombre correcto?",
+  delay: 600,
   requiresInput: true,
 };
 
@@ -154,8 +189,9 @@ export const VARIANT_A_STEPS: Step[] = [
       `Listo. Voy a crear tu cuenta con estos datos:\n• Nombre: ${ctx.name}\n• Correo: ${ctx.email}\n\n¿Todo correcto?`,
     delay: 800,
     options: [
-      { id: "confirm", label: "Sí, crear cuenta" },
-      { id: "edit", label: "Cambiar datos" },
+      { id: "confirm", label: "Sí, crear" },        // 9 chars
+      { id: "edit_email", label: "Corregir correo" }, // 15 chars
+      { id: "edit_name", label: "Corregir nombre" },  // 15 chars
     ],
     requiresInput: true,
   },

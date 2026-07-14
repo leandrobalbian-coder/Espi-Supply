@@ -47,12 +47,24 @@ export const FLOW_MESSAGES = {
   confirming: (name: string, email: string) =>
     `Listo. Estoy creando tu cuenta con estos datos:\n• Nombre: ${name}\n• Correo: ${email}`,
   creatingAccount: `Creando tu cuenta…`,
+  invalidEmail: `Mmm, ese correo no se ve completo. ¿Lo revisas? Debe verse como nombre@dominio.com`,
+  askEmailCorrection: `¿Cuál es el correo correcto?`,
+  askNameCorrection: `¿Cómo es tu nombre correcto?`,
+  reconfirm: (name: string, email: string) =>
+    `Perfecto, actualicé tus datos:\n• Nombre: ${name}\n• Correo: ${email}\n\n¿Todo bien ahora?`,
 };
 
+// Labels <20 chars (límite real Meta: 25, trunca en móvil >20)
 export const PROFILE_QUICK_REPLIES = [
-  { id: "propietario", label: "Propietario de espacios" },
-  { id: "broker", label: "Broker / Asesor" },
+  { id: "propietario", label: "Soy propietario" },
+  { id: "broker", label: "Soy broker" },
 ];
+
+// Copy de UI — centralizado para no tener strings en componentes
+export const UI_HINTS = {
+  awaitingOptions: "Toca una opción para continuar",
+  conversationDone: "Conversación finalizada",
+};
 
 // ─── Variante B — Formulario nativo ──────────────────────────────────────────
 
@@ -99,11 +111,11 @@ export const WELCOME_MESSAGES: Record<UserProfile, string> = {
 
 export const WELCOME_CTAS: Record<UserProfile, { label: string; url: string }[]> = {
   propietario: [
-    { label: "Publicar mi primer espacio", url: "https://spot2.mx/publicar" },
+    { label: "Publicar mi espacio", url: "https://spot2.mx/publicar" }, // era 25 chars
     { label: "Ver el dashboard", url: "https://spot2.mx/dashboard" },
   ],
   broker: [
-    { label: "Gestionar mis espacios", url: "https://spot2.mx/espacios" },
+    { label: "Ver mis espacios", url: "https://spot2.mx/espacios" }, // era 22 chars
     { label: "Ver el dashboard", url: "https://spot2.mx/dashboard" },
   ],
 };

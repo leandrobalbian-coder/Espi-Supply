@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useRef, useReducer, useCallback } from "react";
 import { chatReducer, initialState, type ChatMessage } from "@/lib/chatReducer";
-import { AGENT_NAME, AGENT_FULL_TITLE } from "@/lib/persona";
-import { WELCOME_MESSAGES, WELCOME_CTAS, type UserProfile } from "@/lib/content";
+import { AGENT_FULL_TITLE } from "@/lib/persona";
+import { WELCOME_MESSAGES, WELCOME_CTAS, UI_HINTS, type UserProfile } from "@/lib/content";
+import { isValidEmail } from "@/lib/validation";
 import {
   OPENING_STEPS,
   WHATIS_BRANCH_STEPS,
@@ -12,6 +13,9 @@ import {
   VARIANT_C_STEPS,
   ASK_PROFILE_STEP,
   SUCCESS_STEP,
+  A_RECONFIRM_STEP,
+  ASK_EMAIL_CORRECTION_STEP,
+  ASK_NAME_CORRECTION_STEP,
   type Variant,
   type Step,
   type ConversationContext,
@@ -79,16 +83,36 @@ export default function WhatsAppChat({ variant }: Props) {
     []
   );
 
+  const emitBotError = useCallback((text: string) => {
+    dispatch({ type: "SET_TYPING", value: true });
+    setTimeout(() => {
+      dispatch({ type: "SET_TYPING", value: false });
+      dispatch({
+        type: "ADD_MESSAGE",
+        message: {
+          id: newId(),
+          actor: "bot",
+          type: "text",
+          content: text,
+          timestamp: new Date(),
+          ticks: "read",
+        },
+      });
+    }, 600);
+  }, []);
+
   const emitUserMessage = useCallback((content: string) => {
-    const msg: ChatMessage = {
-      id: newId(),
-      actor: "user",
-      type: "text",
-      content,
-      timestamp: new Date(),
-      ticks: "read",
-    };
-    dispatch({ type: "ADD_MESSAGE", message: msg });
+    dispatch({
+      type: "ADD_MESSAGE",
+      message: {
+        id: newId(),
+        actor: "user",
+        type: "text",
+        content,
+        timestamp: new Date(),
+        ticks: "read",
+      },
+    });
   }, []);
 
   // ─── Flow orchestrator ───────────────────────────────────────────────────────
@@ -101,7 +125,6 @@ export default function WhatsAppChat({ variant }: Props) {
 
       function runStep(currentCtx: ConversationContext) {
         if (stepIdx >= steps.length) {
-          // Go to ask profile
           emitBotMessage(ASK_PROFILE_STEP, currentCtx);
           dispatch({ type: "SET_PHASE", phase: "ask_profile" });
           dispatch({ type: "SET_CONTEXT", context: currentCtx });
@@ -117,7 +140,7 @@ export default function WhatsAppChat({ variant }: Props) {
             dispatch({ type: "SET_STEP_INDEX", index: stepIdx });
             dispatch({ type: "SET_CONTEXT", context: currentCtx });
           });
-          return; // wait for user
+          return;
         }
 
         if (step.type === "form") {
@@ -125,7 +148,7 @@ export default function WhatsAppChat({ variant }: Props) {
           dispatch({ type: "SET_PHASE", phase: "flow" });
           dispatch({ type: "SET_STEP_INDEX", index: stepIdx });
           dispatch({ type: "SET_CONTEXT", context: currentCtx });
-          return; // wait for form submit
+          return;
         }
 
         if (step.type === "platformRedirect") {
@@ -144,17 +167,10 @@ export default function WhatsAppChat({ variant }: Props) {
           return;
         }
 
-        if (step.auto || step.type === "typing" || step.type === "text") {
-          emitBotMessage(step, currentCtx, () => {
-            stepIdx++;
-            runStep(currentCtx);
-          });
-        } else {
-          emitBotMessage(step, currentCtx, () => {
-            stepIdx++;
-            runStep(currentCtx);
-          });
-        }
+        emitBotMessage(step, currentCtx, () => {
+          stepIdx++;
+          runStep(currentCtx);
+        });
       }
 
       runStep(ctx);
@@ -165,9 +181,7 @@ export default function WhatsAppChat({ variant }: Props) {
   const runSuccess = useCallback(
     (ctx: ConversationContext) => {
       const profile = ctx.profile ?? "propietario";
-      // Emit success message
       emitBotMessage(SUCCESS_STEP, ctx, () => {
-        // Emit welcome segmented
         const welcomeMsg: ChatMessage = {
           id: newId(),
           actor: "bot",
@@ -187,8 +201,7 @@ export default function WhatsAppChat({ variant }: Props) {
     [emitBotMessage]
   );
 
-  // ─── Start conversation on mount ────────────────────────────────────────────
-  // Cleanup-based cancellation handles React Strict Mode double-invoke correctly.
+  // ─── Start conversation on mount ─────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -217,16 +230,18 @@ export default function WhatsAppChat({ variant }: Props) {
       safeTimeout(() => {
         if (cancelled) return;
         dispatch({ type: "SET_TYPING", value: false });
-        const msg = {
-          id: `msg-${++msgIdCounter}`,
-          actor: "bot" as const,
-          type: step.type as import("@/lib/chatReducer").ChatMessage["type"],
-          content: typeof step.content === "function" ? step.content(ctx) : step.content,
-          options: step.options,
-          timestamp: new Date(),
-          ticks: "read" as const,
-        };
-        dispatch({ type: "ADD_MESSAGE", message: msg });
+        dispatch({
+          type: "ADD_MESSAGE",
+          message: {
+            id: `msg-${++msgIdCounter}`,
+            actor: "bot" as const,
+            type: step.type as ChatMessage["type"],
+            content: typeof step.content === "function" ? step.content(ctx) : step.content,
+            options: step.options,
+            timestamp: new Date(),
+            ticks: "read" as const,
+          },
+        });
         if (step.requiresInput) {
           dispatch({ type: "SET_PHASE", phase: "opening" });
         } else {
@@ -237,18 +252,16 @@ export default function WhatsAppChat({ variant }: Props) {
     }
 
     safeTimeout(runOpening, 400);
-
     return cancelAll;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variant]);
 
-  // ─── Handle quick reply / user decisions ─────────────────────────────────────
+  // ─── Quick reply handler ──────────────────────────────────────────────────────
   function handleQuickReply(msgId: string, optId: string, optLabel: string) {
     if (answeredMessages.current.has(msgId)) return;
     answeredMessages.current.add(msgId);
 
     emitUserMessage(optLabel);
-
     const ctx = state.context;
 
     if (state.phase === "opening") {
@@ -275,21 +288,27 @@ export default function WhatsAppChat({ variant }: Props) {
     }
 
     if (state.phase === "flow") {
-      // Variant A confirm step
       if (optId === "confirm") {
-        const steps = VARIANT_A_STEPS;
-        const creatingStep = steps.find((s) => s.id === "a_creating");
+        // "Sí, crear" — avanzar a crear cuenta
+        const creatingStep = VARIANT_A_STEPS.find((s) => s.id === "a_creating");
         if (creatingStep) {
           emitBotMessage(creatingStep, ctx, () => {
             emitBotMessage(ASK_PROFILE_STEP, ctx);
             dispatch({ type: "SET_PHASE", phase: "ask_profile" });
           });
         }
-      } else if (optId === "edit") {
-        // Restart flow
-        dispatch({ type: "RESET" });
-        msgIdCounter = 0;
-        answeredMessages.current.clear();
+      } else if (optId === "edit_email") {
+        // Corrección granular: solo pide el correo, mantiene el nombre
+        emitBotMessage(ASK_EMAIL_CORRECTION_STEP, ctx, () => {
+          dispatch({ type: "SET_AWAITING_INPUT", target: "email" });
+          dispatch({ type: "SET_CORRECTION_MODE", mode: "email" });
+        });
+      } else if (optId === "edit_name") {
+        // Corrección granular: solo pide el nombre, mantiene el correo
+        emitBotMessage(ASK_NAME_CORRECTION_STEP, ctx, () => {
+          dispatch({ type: "SET_AWAITING_INPUT", target: "name" });
+          dispatch({ type: "SET_CORRECTION_MODE", mode: "name" });
+        });
       }
       return;
     }
@@ -302,9 +321,21 @@ export default function WhatsAppChat({ variant }: Props) {
     }
   }
 
+  // ─── Text input handler ───────────────────────────────────────────────────────
   function handleTextInput() {
     const val = state.inputValue.trim();
     if (!val) return;
+
+    // Validar correo antes de aceptar
+    if (state.currentInputTarget === "email" && !isValidEmail(val)) {
+      emitUserMessage(val);
+      dispatch({ type: "SET_INPUT_VALUE", value: "" });
+      emitBotError(
+        "Mmm, ese correo no se ve completo. ¿Lo revisas? Debe verse como nombre@dominio.com"
+      );
+      // Mantenemos awaitingInput: true y currentInputTarget: "email" — no avanzamos
+      return;
+    }
 
     emitUserMessage(val);
     dispatch({ type: "SET_INPUT_VALUE", value: "" });
@@ -314,7 +345,15 @@ export default function WhatsAppChat({ variant }: Props) {
     dispatch({ type: "SET_CONTEXT", context: { [target ?? "name"]: val } });
     dispatch({ type: "SET_AWAITING_INPUT", target: null });
 
-    // Continue variant flow
+    // Si venimos de una corrección granular → re-confirmar sin reset
+    if (state.correctionMode !== null) {
+      dispatch({ type: "SET_CORRECTION_MODE", mode: null });
+      emitBotMessage(A_RECONFIRM_STEP, newCtx);
+      dispatch({ type: "SET_PHASE", phase: "flow" });
+      return;
+    }
+
+    // Flujo normal — avanzar al siguiente paso
     const steps =
       variant === "A" ? VARIANT_A_STEPS : variant === "B" ? VARIANT_B_STEPS : VARIANT_C_STEPS;
     const nextStepIdx = state.stepIndex + 1;
@@ -332,7 +371,7 @@ export default function WhatsAppChat({ variant }: Props) {
         emitBotMessage(next, newCtx);
         dispatch({ type: "SET_STEP_INDEX", index: nextStepIdx });
       } else if (next.type === "platformRedirect") {
-        // Show the redirect card and wait for user to click "Confirmar" — do NOT auto-advance
+        // Mostrar card y esperar — no avanzar automáticamente
         emitBotMessage(next, newCtx);
         dispatch({ type: "SET_PHASE", phase: "flow" });
         dispatch({ type: "SET_STEP_INDEX", index: nextStepIdx });
@@ -369,8 +408,7 @@ export default function WhatsAppChat({ variant }: Props) {
     const newCtx = { ...state.context, name, email };
     dispatch({ type: "SET_CONTEXT", context: { name, email } });
 
-    const steps = VARIANT_B_STEPS;
-    const receivedStep = steps.find((s) => s.id === "b_received");
+    const receivedStep = VARIANT_B_STEPS.find((s) => s.id === "b_received");
     if (receivedStep) {
       emitBotMessage(receivedStep, newCtx, () => {
         emitBotMessage(ASK_PROFILE_STEP, newCtx);
@@ -541,7 +579,7 @@ export default function WhatsAppChat({ variant }: Props) {
         ) : (
           <div className="flex items-center gap-2 opacity-40 pointer-events-none select-none">
             <div className="flex-1 bg-white rounded-full px-4 py-2.5 text-[14px] text-[#9898A2] min-h-[44px] flex items-center">
-              {isDone ? "Conversación finalizada" : "Esperando opciones…"}
+              {isDone ? UI_HINTS.conversationDone : UI_HINTS.awaitingOptions}
             </div>
           </div>
         )}
