@@ -50,6 +50,10 @@ export interface Step {
   type: StepType;
   /** Mensaje estático o función que recibe el estado de la conversación */
   content: string | ((ctx: ConversationContext) => string);
+  /** Clave en TONED_COPY para resolver el texto según el tono activo.
+   *  Cuando está presente, el componente usa getCopy(contentKey, tone, ctx)
+   *  en lugar de content. */
+  contentKey?: string;
   options?: QuickReply[];
   fields?: FormField[];
   listItems?: ListItem[];       // para type: "list"
@@ -82,6 +86,7 @@ export const OPENING_STEPS: Step[] = [
     actor: "bot",
     type: "text",
     content: "👋 ¡Hola! Soy Espi, tu asistente de Spot2.",
+    contentKey: "greeting",
     delay: 600,
   },
   {
@@ -90,6 +95,7 @@ export const OPENING_STEPS: Step[] = [
     type: "quickReply",
     content:
       "Te escribo desde este número para ayudarte a crear tu cuenta y empezar a publicar tus espacios, en un par de minutos y sin trámites.",
+    contentKey: "intro_opening",
     delay: 1200,
     options: [
       { id: "start", label: "Sí, ayúdame" },
@@ -106,9 +112,10 @@ export const WHATIS_BRANCH_STEPS: Step[] = [
     type: "quickReply",
     content:
       "Spot2 es el marketplace #1 de bienes raíces comerciales en México. Conectamos a propietarios y brokers con empresas que buscan oficinas, bodegas, locales y más.",
+    contentKey: "whatis_answer",
     delay: 800,
     options: [
-      { id: "start", label: "Crear mi cuenta" }, // era 22 chars "Quiero crear mi cuenta"
+      { id: "start", label: "Crear mi cuenta" },
       { id: "later", label: "Quizás después" },
     ],
     requiresInput: true,
@@ -120,6 +127,7 @@ export const LATER_STEP: Step = {
   actor: "bot",
   type: "text",
   content: "Claro, no hay prisa. Cuando quieras crear tu cuenta aquí estaré. ¡Que tengas buen día! 😊",
+  contentKey: "later_bye",
   delay: 600,
 };
 
@@ -130,10 +138,11 @@ export const ASK_PROFILE_STEP: Step = {
   actor: "bot",
   type: "quickReply",
   content: (ctx) => `Casi listo, ${ctx.name}. ¿Cómo describes mejor tu perfil?`,
+  contentKey: "ask_profile",
   delay: 800,
   options: [
-    { id: "propietario", label: "Soy propietario" }, // era 23 chars
-    { id: "broker", label: "Soy broker" },           // era 15 chars (ya ok, uniformidad)
+    { id: "propietario", label: "Soy propietario" },
+    { id: "broker", label: "Soy broker" },
   ],
   requiresInput: true,
 };
@@ -145,6 +154,7 @@ export const A_RECONFIRM_STEP: Step = {
   type: "quickReply",
   content: (ctx) =>
     `Perfecto, actualicé tus datos:\n• Nombre: ${ctx.name}\n• Correo: ${ctx.email}\n\n¿Todo bien ahora?`,
+  contentKey: "a_reconfirm",
   delay: 700,
   options: [
     { id: "confirm", label: "Sí, crear" },
@@ -160,6 +170,7 @@ export const ASK_EMAIL_CORRECTION_STEP: Step = {
   actor: "bot",
   type: "userInput",
   content: "¿Cuál es el correo correcto?",
+  contentKey: "ask_email_correction",
   delay: 600,
   requiresInput: true,
 };
@@ -169,6 +180,7 @@ export const ASK_NAME_CORRECTION_STEP: Step = {
   actor: "bot",
   type: "userInput",
   content: "¿Cómo es tu nombre correcto?",
+  contentKey: "ask_name_correction",
   delay: 600,
   requiresInput: true,
 };
@@ -179,6 +191,7 @@ export const SUCCESS_STEP: Step = {
   type: "success",
   content: (ctx) =>
     `¡Listo, ${ctx.name}! Tu cuenta ya está creada 🎉 Entra con tu correo para publicar tu primer espacio.`,
+  contentKey: "success",
   delay: 1000,
 };
 
@@ -189,6 +202,7 @@ export const SUCCESS_STEP_V2: Step = {
   type: "success",
   content: (ctx) =>
     `¡Listo, ${ctx.name}! Tu cuenta ya está creada 🎉 Te envié un enlace a ${ctx.email} para confirmar tu cuenta cuando entres 🔗 Mientras tanto, ya puedes empezar.`,
+  contentKey: "success_v2",
   delay: 1000,
 };
 
@@ -198,6 +212,7 @@ export const V1_ASK_CODE_STEP = (email: string): Step => ({
   actor: "bot",
   type: "userInput",
   content: `Para confirmar que es tuyo, te envié un código de 6 dígitos a ${email} 📩 ¿Me lo compartes?`,
+  contentKey: "v1_ask_code",
   delay: 900,
   requiresInput: true,
 });
@@ -207,6 +222,7 @@ export const V1_CODE_SUCCESS_STEP: Step = {
   actor: "bot",
   type: "text",
   content: "¡Perfecto! Correo confirmado ✓",
+  contentKey: "v1_confirmed",
   delay: 600,
 };
 
@@ -215,6 +231,7 @@ export const V1_CODE_WRONG_STEP: Step = {
   actor: "bot",
   type: "quickReply",
   content: "Ese código no coincide. ¿Lo reintentas?",
+  contentKey: "v1_wrong",
   delay: 600,
   options: [{ id: "resend_code", label: "Reenviar código" }],
   requiresInput: true,
@@ -225,6 +242,7 @@ export const V1_RESENT_STEP: Step = {
   actor: "bot",
   type: "userInput",
   content: "Listo, te lo mandé de nuevo 📩 ¿Me lo compartes?",
+  contentKey: "v1_resent",
   delay: 600,
   requiresInput: true,
 };
@@ -237,6 +255,7 @@ export const VARIANT_A_STEPS: Step[] = [
     actor: "bot",
     type: "userInput",
     content: "Perfecto. Para empezar, ¿cómo te llamas?",
+    contentKey: "a_ask_name",
     delay: 800,
     requiresInput: true,
   },
@@ -245,6 +264,7 @@ export const VARIANT_A_STEPS: Step[] = [
     actor: "bot",
     type: "userInput",
     content: (ctx) => `Genial, ${ctx.name} 👌 ¿A qué correo asociamos tu cuenta?`,
+    contentKey: "a_ask_email",
     delay: 800,
     requiresInput: true,
   },
@@ -254,11 +274,12 @@ export const VARIANT_A_STEPS: Step[] = [
     type: "quickReply",
     content: (ctx) =>
       `Listo. Voy a crear tu cuenta con estos datos:\n• Nombre: ${ctx.name}\n• Correo: ${ctx.email}\n\n¿Todo correcto?`,
+    contentKey: "a_confirm",
     delay: 800,
     options: [
-      { id: "confirm", label: "Sí, crear" },        // 9 chars
-      { id: "edit_email", label: "Corregir correo" }, // 15 chars
-      { id: "edit_name", label: "Corregir nombre" },  // 15 chars
+      { id: "confirm", label: "Sí, crear" },
+      { id: "edit_email", label: "Corregir correo" },
+      { id: "edit_name", label: "Corregir nombre" },
     ],
     requiresInput: true,
   },
@@ -267,6 +288,7 @@ export const VARIANT_A_STEPS: Step[] = [
     actor: "bot",
     type: "typing",
     content: "Creando tu cuenta…",
+    contentKey: "a_creating",
     delay: 400,
     auto: true,
   },
@@ -293,6 +315,7 @@ export const VARIANT_B_STEPS: Step[] = [
     type: "text",
     content:
       "Para agilizarlo, te comparto un formulario rápido. Solo llena tus datos y en un momento tienes tu cuenta.",
+    contentKey: "b_form_intro",
     delay: 800,
   },
   {
@@ -300,6 +323,7 @@ export const VARIANT_B_STEPS: Step[] = [
     actor: "bot",
     type: "form",
     content: "Completa tus datos:",
+    contentKey: "b_form_label",
     delay: 600,
     fields: [
       { id: "name", label: "Nombre completo", type: "text", placeholder: "Ej. María García" },
@@ -320,6 +344,7 @@ export const VARIANT_B_STEPS: Step[] = [
     actor: "bot",
     type: "typing",
     content: "Recibido. Creando tu cuenta…",
+    contentKey: "b_received",
     delay: 400,
     auto: true,
   },
@@ -333,6 +358,7 @@ export const VARIANT_C_STEPS: Step[] = [
     actor: "bot",
     type: "userInput",
     content: "Perfecto. ¿Cómo te llamas?",
+    contentKey: "c_ask_name",
     delay: 800,
     requiresInput: true,
   },
@@ -341,6 +367,7 @@ export const VARIANT_C_STEPS: Step[] = [
     actor: "bot",
     type: "userInput",
     content: (ctx) => `Gracias, ${ctx.name}. ¿Cuál es tu correo?`,
+    contentKey: "c_ask_email",
     delay: 800,
     requiresInput: true,
   },
@@ -350,6 +377,7 @@ export const VARIANT_C_STEPS: Step[] = [
     type: "platformRedirect",
     content: (ctx) =>
       `Perfecto, ${ctx.name}. Te mando a la plataforma con tus datos ya listos — solo confirma y tu cuenta queda creada al instante.`,
+    contentKey: "c_redirect",
     delay: 800,
     requiresInput: true,
   },
@@ -369,13 +397,52 @@ export const SPACE_TYPES: ListItem[] = [
   { id: "flex",        title: "Flex / Coworking",  description: "Espacio compartido o flexible" },
 ];
 
-export const PUBLISH_SPACE_STEPS: Step[] = [
+// Pasos de éxito compartidos entre variantes A y B
+const PUBLISH_CONFIRM_STEP: Step = {
+  id: "publish_confirm",
+  actor: "bot",
+  type: "quickReply",
+  content: (ctx) =>
+    `Perfecto, acá el resumen:\n\n• Tipo: ${ctx.spaceType ?? "—"}\n• Tamaño: ${ctx.spaceSize ?? "—"} m²\n• Precio: $${ctx.spacePrice ?? "—"}/mes\n• Dirección: ${ctx.spaceStreet ?? "—"} ${ctx.spaceNumber ?? ""}, CP ${ctx.spaceZip ?? "—"}\n• Fotos: ✓\n\n¿Lo publicamos?`,
+  contentKey: "publish_confirm_summary",
+  delay: 900,
+  options: [
+    { id: "space_publish", label: "Publicar" },
+    { id: "space_edit",    label: "Editar datos" },
+  ],
+  requiresInput: true,
+};
+
+const PUBLISH_CREATING_STEP: Step = {
+  id: "publish_creating",
+  actor: "bot",
+  type: "typing",
+  content: "Publicando tu espacio…",
+  contentKey: "publish_creating",
+  delay: 400,
+  auto: true,
+};
+
+const PUBLISH_SUCCESS_STEP: Step = {
+  id: "publish_success",
+  actor: "bot",
+  type: "success",
+  content: (ctx) =>
+    `¡Listo${ctx.name ? `, ${ctx.name}` : ""}! Tu espacio ya está en borrador 🎉 Entra a la plataforma para agregar descripción, más fotos y publicarlo.`,
+  contentKey: "publish_success",
+  delay: 1000,
+};
+
+// ─── Variante A — Conversacional (dato a dato) ───────────────────────────────
+// Pregunta tipo (list), luego m², precio, dirección y fotos por separado.
+export const PUBLISH_VARIANT_A_STEPS: Step[] = [
   {
     id: "publish_intro",
     actor: "bot",
     type: "text",
     content:
       "¡Genial! Publicar un espacio toma menos de 5 minutos. Solo necesito unos datos básicos — el resto lo completás en la plataforma con todo pre-cargado.",
+    contentKey: "publish_intro_a",
     delay: 800,
   },
   {
@@ -383,6 +450,7 @@ export const PUBLISH_SPACE_STEPS: Step[] = [
     actor: "bot",
     type: "list",
     content: "¿Qué tipo de espacio es?",
+    contentKey: "publish_type_q",
     delay: 700,
     listItems: SPACE_TYPES,
     listButtonLabel: "Ver tipos",
@@ -393,6 +461,7 @@ export const PUBLISH_SPACE_STEPS: Step[] = [
     actor: "bot",
     type: "userInput",
     content: "¿Cuántos metros cuadrados tiene? Solo el número.",
+    contentKey: "publish_size_q",
     delay: 700,
     requiresInput: true,
   },
@@ -401,6 +470,7 @@ export const PUBLISH_SPACE_STEPS: Step[] = [
     actor: "bot",
     type: "userInput",
     content: "¿Y el precio mensual en pesos? Solo el número, sin comas ni símbolo.",
+    contentKey: "publish_price_q",
     delay: 700,
     requiresInput: true,
   },
@@ -409,6 +479,7 @@ export const PUBLISH_SPACE_STEPS: Step[] = [
     actor: "bot",
     type: "form",
     content: "¿Dónde está ubicado el espacio?",
+    contentKey: "publish_address_q",
     delay: 700,
     fields: [
       { id: "calle",  label: "Calle",           type: "text", placeholder: "Ej. Insurgentes Sur" },
@@ -423,36 +494,117 @@ export const PUBLISH_SPACE_STEPS: Step[] = [
     type: "photoUpload",
     content:
       "Ya casi 📸 Mandame fotos del espacio — mínimo 3 para que tu anuncio destaque. Entre más, mejor.",
+    contentKey: "publish_photos_a",
     delay: 800,
     requiresInput: true,
   },
+  PUBLISH_CONFIRM_STEP,
+  PUBLISH_CREATING_STEP,
+  PUBLISH_SUCCESS_STEP,
+];
+
+// ─── Variante B — Formulario nativo (WhatsApp Flow) ──────────────────────────
+// Agrupa todos los datos de texto en un solo formulario (6 campos, dentro del
+// límite de 10 de WhatsApp Flows). Las fotos quedan fuera: Meta no soporta
+// adjuntos dentro de un Flow nativo; siempre van como paso aparte.
+export const PUBLISH_VARIANT_B_STEPS: Step[] = [
   {
-    id: "publish_confirm",
+    id: "publish_intro",
     actor: "bot",
-    type: "quickReply",
-    content: (ctx) =>
-      `Perfecto, acá el resumen:\n\n• Tipo: ${ctx.spaceType ?? "—"}\n• Tamaño: ${ctx.spaceSize ?? "—"} m²\n• Precio: $${ctx.spacePrice ?? "—"}/mes\n• Dirección: ${ctx.spaceStreet ?? "—"} ${ctx.spaceNumber ?? ""}, CP ${ctx.spaceZip ?? "—"}\n• Fotos: ✓\n\n¿Lo publicamos?`,
-    delay: 900,
-    options: [
-      { id: "space_publish", label: "Publicar" },
-      { id: "space_edit",    label: "Editar datos" },
+    type: "text",
+    content:
+      "¡Genial! Para agilizarlo, te comparto un formulario con todos los datos del espacio. Lo llenás en un paso y listo.",
+    contentKey: "publish_intro_b",
+    delay: 800,
+  },
+  {
+    id: "publish_form_b",
+    actor: "bot",
+    type: "form",
+    content: "Datos del espacio:",
+    contentKey: "publish_form_b_label",
+    delay: 600,
+    fields: [
+      {
+        id: "espacio_tipo",
+        label: "Tipo de espacio",
+        type: "select",
+        placeholder: "Selecciona el tipo",
+        options: SPACE_TYPES.map((t) => t.title),
+      },
+      { id: "tamaño",  label: "Tamaño (m²)",           type: "text", placeholder: "Ej. 250" },
+      { id: "precio",  label: "Precio mensual (MXN)",  type: "text", placeholder: "Ej. 25000" },
+      { id: "calle",   label: "Calle",                 type: "text", placeholder: "Ej. Insurgentes Sur" },
+      { id: "numero",  label: "Número exterior",       type: "text", placeholder: "Ej. 1234" },
+      { id: "cp",      label: "Código postal",         type: "text", placeholder: "Ej. 03810" },
     ],
     requiresInput: true,
   },
   {
-    id: "publish_creating",
+    // Fotos fuera del Flow nativo — restricción Meta: los adjuntos no caben en WhatsApp Flows.
+    id: "publish_photos",
     actor: "bot",
-    type: "typing",
-    content: "Publicando tu espacio…",
-    delay: 400,
-    auto: true,
+    type: "photoUpload",
+    content:
+      "¡Casi listo! 📸 Solo falta que me mandes fotos del espacio — mínimo 3 para que tu anuncio destaque.",
+    contentKey: "publish_photos_b",
+    delay: 800,
+    requiresInput: true,
+  },
+  PUBLISH_CONFIRM_STEP,
+  PUBLISH_CREATING_STEP,
+  PUBLISH_SUCCESS_STEP,
+];
+
+// ─── Variante C — Pre-rellenado en plataforma ────────────────────────────────
+// Captura lo mínimo (tipo + m²) en el chat y redirige a la plataforma con el
+// borrador pre-cargado para que el usuario complete precio, dirección y fotos allá.
+export const PUBLISH_VARIANT_C_STEPS: Step[] = [
+  {
+    id: "publish_intro",
+    actor: "bot",
+    type: "text",
+    content:
+      "¡Genial! Solo necesito dos datos rápidos — el resto lo completás en Spot2 con el borrador ya pre-cargado.",
+    contentKey: "publish_intro_c",
+    delay: 800,
   },
   {
-    id: "publish_success",
+    id: "publish_type",
+    actor: "bot",
+    type: "list",
+    content: "¿Qué tipo de espacio es?",
+    contentKey: "publish_type_q",
+    delay: 700,
+    listItems: SPACE_TYPES,
+    listButtonLabel: "Ver tipos",
+    requiresInput: true,
+  },
+  {
+    id: "publish_size",
+    actor: "bot",
+    type: "userInput",
+    content: "¿Y cuántos metros cuadrados tiene? Solo el número.",
+    contentKey: "publish_size_c_q",
+    delay: 700,
+    requiresInput: true,
+  },
+  {
+    id: "publish_redirect_c",
+    actor: "bot",
+    type: "platformRedirect",
+    content: "Perfecto. Te mando a Spot2 con el borrador de tu espacio pre-cargado — solo completás precio, dirección y fotos allá.",
+    contentKey: "publish_redirect_c",
+    delay: 800,
+    requiresInput: true,
+  },
+  {
+    id: "publish_success_c",
     actor: "bot",
     type: "success",
     content: (ctx) =>
-      `¡Listo${ctx.name ? `, ${ctx.name}` : ""}! Tu espacio ya está en borrador 🎉 Entra a la plataforma para agregar descripción, más fotos y publicarlo.`,
+      `¡Listo${ctx.name ? `, ${ctx.name}` : ""}! Tu borrador está en Spot2. Completá precio, dirección y fotos para publicarlo. 🚀`,
+    contentKey: "publish_success_c",
     delay: 1000,
   },
 ];

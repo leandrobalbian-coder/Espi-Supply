@@ -33,8 +33,10 @@ export interface ChatState {
     | "publish_size"
     | "publish_price"
     | "publish_address"
+    | "publish_form_b"
     | "publish_photos"
     | "publish_confirm"
+    | "publish_redirect_c"
     | "publish_done";
   stepIndex: number;
   context: {

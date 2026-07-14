@@ -4,6 +4,7 @@ import PhoneMockup from "@/components/PhoneMockup";
 import type { Variant, VerificationMethod } from "@/lib/flows";
 import type { StartMode } from "@/components/WhatsAppChat";
 import { AGENT_NAME } from "@/lib/persona";
+import type { Tone } from "@/lib/tone";
 
 const VARIANTS: { id: Variant; label: string; tagline: string }[] = [
   { id: "A", label: "Variante A", tagline: "Solo botón de confirmación" },
@@ -19,6 +20,12 @@ const VERIFICATION_METHODS: { id: VerificationMethod; label: string; tagline: st
 
 const DEMO_CODE = "123456";
 
+const TONES: { id: Tone; label: string; tagline: string }[] = [
+  { id: "calido",   label: "Cálido",             tagline: "Cercano, con emojis — Espi actual" },
+  { id: "neutro",   label: "Neutro-profesional",  tagline: "Sobrio, sin emojis" },
+  { id: "directo",  label: "Directo",             tagline: "Mínimo, eficiente" },
+];
+
 const DEMO_MODES: { id: StartMode; label: string; tagline: string }[] = [
   { id: "onboarding",    label: "Crear cuenta",      tagline: "Onboarding completo" },
   { id: "publish_space", label: "Publicar espacio",   tagline: "Flujo de publicación" },
@@ -28,6 +35,7 @@ export default function Home() {
   const [variant, setVariant] = useState<Variant>("A");
   const [verificationMethod, setVerificationMethod] = useState<VerificationMethod>("V0");
   const [startMode, setStartMode] = useState<StartMode>("onboarding");
+  const [tone, setTone] = useState<Tone>("calido");
   const [showIntro, setShowIntro] = useState(true);
 
   if (showIntro) {
@@ -125,36 +133,84 @@ export default function Home() {
               </div>
             </section>
 
-            {/* Verification method selector */}
+            {/* Verification method selector — solo aplica al onboarding */}
+            {startMode === "onboarding" ? (
+              <section>
+                <h2 className="text-[11px] font-bold text-[#9898A2] uppercase tracking-widest mb-3">
+                  Método de verificación
+                </h2>
+                <div className="flex flex-col gap-2">
+                  {VERIFICATION_METHODS.map((vm) => (
+                    <button
+                      key={vm.id}
+                      onClick={() => setVerificationMethod(vm.id)}
+                      className={`
+                        w-full text-left px-4 py-3 rounded-xl border-2 transition-all duration-150
+                        focus:outline-none focus:ring-2 focus:ring-[#FFAA00]/40
+                        ${verificationMethod === vm.id
+                          ? "border-[#FFAA00] bg-[#FFFBF0]"
+                          : "border-[#E5E5E5] bg-white hover:border-[#FFAA00]/40"
+                        }
+                      `}
+                    >
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <span className={`text-[13px] font-bold ${verificationMethod === vm.id ? "text-[#1C1F2A]" : "text-[#424552]"}`}>
+                          {vm.label}
+                        </span>
+                        {verificationMethod === vm.id && (
+                          <span className="text-[10px] font-bold text-[#FFAA00] bg-[#FFAA00]/10 px-2 py-0.5 rounded-full">
+                            Activa
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[12px] text-[#737373]">{vm.tagline}</p>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : (
+              <section>
+                <h2 className="text-[11px] font-bold text-[#9898A2] uppercase tracking-widest mb-3">
+                  Método de verificación
+                </h2>
+                <div className="rounded-xl border border-dashed border-[#E5E5E5] bg-[#F9F9F9] px-4 py-3">
+                  <p className="text-[12px] text-[#9898A2] leading-relaxed">
+                    La verificación aplica al crear cuenta. En publicar espacio la cuenta ya existe — este selector no tiene efecto.
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {/* Tone selector */}
             <section>
               <h2 className="text-[11px] font-bold text-[#9898A2] uppercase tracking-widest mb-3">
-                Método de verificación
+                Tono de Espi
               </h2>
               <div className="flex flex-col gap-2">
-                {VERIFICATION_METHODS.map((vm) => (
+                {TONES.map((t) => (
                   <button
-                    key={vm.id}
-                    onClick={() => setVerificationMethod(vm.id)}
+                    key={t.id}
+                    onClick={() => setTone(t.id)}
                     className={`
                       w-full text-left px-4 py-3 rounded-xl border-2 transition-all duration-150
                       focus:outline-none focus:ring-2 focus:ring-[#FFAA00]/40
-                      ${verificationMethod === vm.id
+                      ${tone === t.id
                         ? "border-[#FFAA00] bg-[#FFFBF0]"
                         : "border-[#E5E5E5] bg-white hover:border-[#FFAA00]/40"
                       }
                     `}
                   >
                     <div className="flex items-center gap-2 mb-0.5">
-                      <span className={`text-[13px] font-bold ${verificationMethod === vm.id ? "text-[#1C1F2A]" : "text-[#424552]"}`}>
-                        {vm.label}
+                      <span className={`text-[13px] font-bold ${tone === t.id ? "text-[#1C1F2A]" : "text-[#424552]"}`}>
+                        {t.label}
                       </span>
-                      {verificationMethod === vm.id && (
+                      {tone === t.id && (
                         <span className="text-[10px] font-bold text-[#FFAA00] bg-[#FFAA00]/10 px-2 py-0.5 rounded-full">
-                          Activa
+                          Activo
                         </span>
                       )}
                     </div>
-                    <p className="text-[12px] text-[#737373]">{vm.tagline}</p>
+                    <p className="text-[12px] text-[#737373]">{t.tagline}</p>
                   </button>
                 ))}
               </div>
@@ -194,7 +250,7 @@ export default function Home() {
               <h2 className="text-[11px] font-bold text-[#9898A2] uppercase tracking-widest mb-3">
                 Métricas de fricción
               </h2>
-              <CombinedMetricsCard variant={variant} verificationMethod={verificationMethod} />
+              <CombinedMetricsCard variant={variant} verificationMethod={verificationMethod} startMode={startMode} />
             </section>
 
             {/* Info note */}
@@ -206,7 +262,7 @@ export default function Home() {
 
         {/* Phone mockup */}
         <main className="flex-1 overflow-hidden bg-[#F5F5F5]">
-          <PhoneMockup variant={variant} verificationMethod={verificationMethod} startMode={startMode} />
+          <PhoneMockup variant={variant} verificationMethod={verificationMethod} startMode={startMode} tone={tone} />
         </main>
       </div>
     </div>
@@ -316,8 +372,37 @@ const VERIFICATION_METRICS: Record<
   },
 };
 
-function CombinedMetricsCard({ variant, verificationMethod }: { variant: Variant; verificationMethod: VerificationMethod }) {
-  const vm = VARIANT_METRICS[variant];
+// [PLACEHOLDER — validar números reales con Growth/Producto]
+const PUBLISH_VARIANT_METRICS: Record<
+  Variant,
+  { steps: number; taps: number; friction: "Baja" | "Media" | "Alta"; pros: string[]; cons: string[] }
+> = {
+  A: {
+    steps: 7,
+    taps: 6,
+    friction: "Baja",
+    pros: ["Datos capturados uno a uno", "Corrección fácil por paso", "Sin salir del chat"],
+    cons: ["Más mensajes = más tiempo", "Más toques que la variante B"],
+  },
+  B: {
+    steps: 4,
+    taps: 3,
+    friction: "Baja",
+    pros: ["Todos los datos en un solo formulario", "Validación nativa", "Mínimos mensajes"],
+    cons: ["Rompe el ritmo conversacional", "Depende de WhatsApp Flows"],
+  },
+  C: {
+    steps: 3,
+    taps: 2,
+    friction: "Media",
+    pros: ["Menor fricción en el chat", "Formulario completo en plataforma web"],
+    cons: ["Cambio de contexto (WhatsApp → web)", "Riesgo de abandono al redirigir"],
+  },
+};
+
+function CombinedMetricsCard({ variant, verificationMethod, startMode }: { variant: Variant; verificationMethod: VerificationMethod; startMode: StartMode }) {
+  const isPublish = startMode === "publish_space";
+  const vm  = isPublish ? PUBLISH_VARIANT_METRICS[variant] : VARIANT_METRICS[variant];
   const vvm = VERIFICATION_METRICS[verificationMethod];
   const frictionColor = (f: string) =>
     f === "Baja" ? "#25D366" : f === "Media" ? "#FFAA00" : "#DC2626";
@@ -327,7 +412,7 @@ function CombinedMetricsCard({ variant, verificationMethod }: { variant: Variant
       {/* Variante activa */}
       <div className="px-3 pt-3 pb-1">
         <p className="text-[10px] font-bold text-[#9898A2] uppercase tracking-wider mb-2">
-          Variante activa
+          Variante activa{isPublish ? " — Publicar espacio" : " — Crear cuenta"}
         </p>
         <div className="grid grid-cols-3 divide-x divide-[#E5E5E5] bg-[#F5F5F5] rounded-lg mb-2">
           <Stat label="Pasos" value={vm.steps} />
@@ -340,22 +425,31 @@ function CombinedMetricsCard({ variant, verificationMethod }: { variant: Variant
           </div>
         </div>
         <ProsConsBlock pros={vm.pros} cons={vm.cons} />
+        <p className="text-[10px] text-[#9898A2] mt-1">[PLACEHOLDER — validar con Growth/Producto]</p>
       </div>
 
       <div className="h-px bg-[#E5E5E5] mx-3" />
 
-      {/* Verificación activa */}
+      {/* Verificación activa — solo relevante en onboarding */}
       <div className="px-3 pt-2 pb-3">
         <p className="text-[10px] font-bold text-[#9898A2] uppercase tracking-wider mb-2">
           Verificación activa
         </p>
-        <div className="flex items-center gap-2 mb-2">
-          <span className="text-[14px] font-bold" style={{ color: frictionColor(vvm.friction) }}>
-            {vvm.friction}
-          </span>
-          <span className="text-[10px] text-[#9898A2]">fricción adicional</span>
-        </div>
-        <ProsConsBlock pros={vvm.pros} cons={vvm.cons} />
+        {isPublish ? (
+          <p className="text-[11px] text-[#9898A2] leading-relaxed">
+            No aplica en este modo — la cuenta ya existe al publicar.
+          </p>
+        ) : (
+          <>
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[14px] font-bold" style={{ color: frictionColor(vvm.friction) }}>
+                {vvm.friction}
+              </span>
+              <span className="text-[10px] text-[#9898A2]">fricción adicional</span>
+            </div>
+            <ProsConsBlock pros={vvm.pros} cons={vvm.cons} />
+          </>
+        )}
         <p className="text-[10px] text-[#9898A2] mt-2">[PLACEHOLDER — validar con Growth/Producto]</p>
       </div>
     </div>

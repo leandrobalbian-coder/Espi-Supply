@@ -4,6 +4,7 @@ import { chatReducer, initialState, type ChatMessage } from "@/lib/chatReducer";
 import { AGENT_FULL_TITLE } from "@/lib/persona";
 import { WELCOME_MESSAGES, WELCOME_CTAS, UI_HINTS, type UserProfile } from "@/lib/content";
 import { isValidEmail } from "@/lib/validation";
+import { getCopy, type Tone } from "@/lib/tone";
 import {
   OPENING_STEPS,
   WHATIS_BRANCH_STEPS,
@@ -11,7 +12,9 @@ import {
   VARIANT_A_STEPS,
   VARIANT_B_STEPS,
   VARIANT_C_STEPS,
-  PUBLISH_SPACE_STEPS,
+  PUBLISH_VARIANT_A_STEPS,
+  PUBLISH_VARIANT_B_STEPS,
+  PUBLISH_VARIANT_C_STEPS,
   ASK_PROFILE_STEP,
   SUCCESS_STEP,
   SUCCESS_STEP_V2,
@@ -42,18 +45,20 @@ interface Props {
   variant: Variant;
   verificationMethod: VerificationMethod;
   startMode: StartMode;
+  tone: Tone;
 }
 
 let msgIdCounter = 0;
 function newId() { return `msg-${++msgIdCounter}`; }
 
-function resolveContent(step: Step, ctx: ConversationContext): string {
+function resolveTonedContent(step: Step, tone: Tone, ctx: ConversationContext): string {
+  if (step.contentKey) return getCopy(step.contentKey, tone, ctx);
   return typeof step.content === "function" ? step.content(ctx) : step.content;
 }
 
 const DEMO_CODE = "123456";
 
-export default function WhatsAppChat({ variant, verificationMethod, startMode }: Props) {
+export default function WhatsAppChat({ variant, verificationMethod, startMode, tone }: Props) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -89,7 +94,7 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
             id: newId(),
             actor: "bot",
             type: step.type as ChatMessage["type"],
-            content: resolveContent(step, ctx),
+            content: resolveTonedContent(step, tone, ctx),
             options: step.options,
             fields: step.fields,
             listItems: step.listItems,
@@ -101,7 +106,7 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
         onDone?.();
       }, step.delay ?? 800);
     },
-    []
+    [tone]
   );
 
   const emitBotError = useCallback((text: string) => {
@@ -184,18 +189,29 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
   // ─── Publish space flow ───────────────────────────────────────────────────────
   const runPublishSpaceFlow = useCallback(
     (ctx: ConversationContext) => {
-      const introStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_intro")!;
-      const typeStep  = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_type")!;
-      const typeIdx   = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_type");
-
-      emitBotMessage(introStep, ctx, () => {
-        emitBotMessage(typeStep, ctx);
-        dispatch({ type: "SET_PHASE", phase: "publish_type" });
-        dispatch({ type: "SET_STEP_INDEX", index: typeIdx });
-        dispatch({ type: "SET_CONTEXT", context: ctx });
-      });
+      if (variant === "B") {
+        const introStep = PUBLISH_VARIANT_B_STEPS.find((s) => s.id === "publish_intro")!;
+        const formStep  = PUBLISH_VARIANT_B_STEPS.find((s) => s.id === "publish_form_b")!;
+        emitBotMessage(introStep, ctx, () => {
+          emitBotMessage(formStep, ctx);
+          dispatch({ type: "SET_PHASE", phase: "publish_form_b" });
+          dispatch({ type: "SET_CONTEXT", context: ctx });
+        });
+      } else {
+        // Variante A y C: intro → list de tipos
+        const stepsRef = variant === "C" ? PUBLISH_VARIANT_C_STEPS : PUBLISH_VARIANT_A_STEPS;
+        const introStep = stepsRef.find((s) => s.id === "publish_intro")!;
+        const typeStep  = stepsRef.find((s) => s.id === "publish_type")!;
+        const typeIdx   = stepsRef.findIndex((s) => s.id === "publish_type");
+        emitBotMessage(introStep, ctx, () => {
+          emitBotMessage(typeStep, ctx);
+          dispatch({ type: "SET_PHASE", phase: "publish_type" });
+          dispatch({ type: "SET_STEP_INDEX", index: typeIdx });
+          dispatch({ type: "SET_CONTEXT", context: ctx });
+        });
+      }
     },
-    [emitBotMessage]
+    [variant, emitBotMessage]
   );
 
   // ─── Variant flow orchestrator ───────────────────────────────────────────────
@@ -294,7 +310,7 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
               id: `msg-${++msgIdCounter}`,
               actor: "bot" as const,
               type: step.type as ChatMessage["type"],
-              content: typeof step.content === "function" ? step.content(ctx) : step.content,
+              content: resolveTonedContent(step, tone, ctx),
               options: step.options,
               timestamp: new Date(),
               ticks: "read" as const,
@@ -363,15 +379,16 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
 
     if (state.phase === "publish_confirm") {
       if (optId === "space_publish") {
-        const creatingStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_creating")!;
-        const successStep  = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_success")!;
+        const stepsRef = variant === "B" ? PUBLISH_VARIANT_B_STEPS : PUBLISH_VARIANT_A_STEPS;
+        const creatingStep = stepsRef.find((s) => s.id === "publish_creating")!;
+        const successStep  = stepsRef.find((s) => s.id === "publish_success")!;
         emitBotMessage(creatingStep, ctx, () => {
           emitBotMessage(successStep, ctx, () => {
             const doneMsg: ChatMessage = {
               id: newId(),
               actor: "bot",
               type: "welcome",
-              content: "¿Qué hacemos ahora?",
+              content: getCopy("done_welcome_q", tone, ctx),
               options: [
                 { id: "https://spot2.mx/espacios", label: "Ver mi espacio" },
                 { id: "https://spot2.mx/dashboard", label: "Ver el dashboard" },
@@ -386,18 +403,31 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
           });
         });
       } else if (optId === "space_edit") {
-        // Reinicia desde tipo de espacio
-        const typeStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_type")!;
-        const typeIdx  = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_type");
-        emitBotMessage(
-          { id: "edit_restart", actor: "bot", type: "text", content: "Claro, empecemos de nuevo. ¿Qué tipo de espacio es?", delay: 600 },
-          ctx,
-          () => {
-            emitBotMessage(typeStep, ctx);
-            dispatch({ type: "SET_PHASE", phase: "publish_type" });
-            dispatch({ type: "SET_STEP_INDEX", index: typeIdx });
-          }
-        );
+        if (variant === "B") {
+          // Variante B: muestra el formulario de nuevo
+          const formStep = PUBLISH_VARIANT_B_STEPS.find((s) => s.id === "publish_form_b")!;
+          emitBotMessage(
+            { id: "edit_restart", actor: "bot", type: "text", content: getCopy("publish_edit_restart_b", tone, ctx), delay: 600 },
+            ctx,
+            () => {
+              emitBotMessage(formStep, ctx);
+              dispatch({ type: "SET_PHASE", phase: "publish_form_b" });
+            }
+          );
+        } else {
+          // Variante A: reinicia desde tipo de espacio
+          const typeStep = PUBLISH_VARIANT_A_STEPS.find((s) => s.id === "publish_type")!;
+          const typeIdx  = PUBLISH_VARIANT_A_STEPS.findIndex((s) => s.id === "publish_type");
+          emitBotMessage(
+            { id: "edit_restart", actor: "bot", type: "text", content: getCopy("publish_edit_restart_a", tone, ctx), delay: 600 },
+            ctx,
+            () => {
+              emitBotMessage(typeStep, ctx);
+              dispatch({ type: "SET_PHASE", phase: "publish_type" });
+              dispatch({ type: "SET_STEP_INDEX", index: typeIdx });
+            }
+          );
+        }
       }
       return;
     }
@@ -412,8 +442,10 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
     const newCtx = { ...state.context, spaceType: itemTitle };
     dispatch({ type: "SET_CONTEXT", context: { spaceType: itemTitle } });
 
-    const sizeStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_size")!;
-    const sizeIdx  = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_size");
+    // A y C: ambas van a publish_size tras seleccionar tipo
+    const stepsRef = variant === "C" ? PUBLISH_VARIANT_C_STEPS : PUBLISH_VARIANT_A_STEPS;
+    const sizeStep = stepsRef.find((s) => s.id === "publish_size")!;
+    const sizeIdx  = stepsRef.findIndex((s) => s.id === "publish_size");
     emitBotMessage(sizeStep, newCtx, () => {
       dispatch({ type: "SET_AWAITING_INPUT", target: "size" });
       dispatch({ type: "SET_PHASE", phase: "publish_size" });
@@ -425,8 +457,9 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
   function handlePhotosComplete(msgId: string) {
     photosCompletedMessages.current.add(msgId);
     const ctx = state.context;
-    const confirmStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_confirm")!;
-    const confirmIdx  = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_confirm");
+    const stepsRef = variant === "B" ? PUBLISH_VARIANT_B_STEPS : PUBLISH_VARIANT_A_STEPS;
+    const confirmStep = stepsRef.find((s) => s.id === "publish_confirm")!;
+    const confirmIdx  = stepsRef.findIndex((s) => s.id === "publish_confirm");
     emitBotMessage(confirmStep, ctx);
     dispatch({ type: "SET_PHASE", phase: "publish_confirm" });
     dispatch({ type: "SET_STEP_INDEX", index: confirmIdx });
@@ -460,25 +493,33 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
       dispatch({ type: "SET_AWAITING_INPUT", target: null });
       const newCtx = { ...state.context, spaceSize: val };
       dispatch({ type: "SET_CONTEXT", context: { spaceSize: val } });
-      const priceStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_price")!;
-      const priceIdx  = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_price");
-      emitBotMessage(priceStep, newCtx, () => {
-        dispatch({ type: "SET_AWAITING_INPUT", target: "price" });
-        dispatch({ type: "SET_PHASE", phase: "publish_price" });
-        dispatch({ type: "SET_STEP_INDEX", index: priceIdx });
-      });
+      if (variant === "C") {
+        // Variante C: tras m², redirige a la plataforma con borrador pre-cargado
+        const redirectStep = PUBLISH_VARIANT_C_STEPS.find((s) => s.id === "publish_redirect_c")!;
+        emitBotMessage(redirectStep, newCtx);
+        dispatch({ type: "SET_PHASE", phase: "publish_redirect_c" });
+      } else {
+        // Variante A: continúa con precio
+        const priceStep = PUBLISH_VARIANT_A_STEPS.find((s) => s.id === "publish_price")!;
+        const priceIdx  = PUBLISH_VARIANT_A_STEPS.findIndex((s) => s.id === "publish_price");
+        emitBotMessage(priceStep, newCtx, () => {
+          dispatch({ type: "SET_AWAITING_INPUT", target: "price" });
+          dispatch({ type: "SET_PHASE", phase: "publish_price" });
+          dispatch({ type: "SET_STEP_INDEX", index: priceIdx });
+        });
+      }
       return;
     }
 
-    // Publish flow — precio
+    // Publish flow — precio (variante A)
     if (state.phase === "publish_price") {
       emitUserMessage(val);
       dispatch({ type: "SET_INPUT_VALUE", value: "" });
       dispatch({ type: "SET_AWAITING_INPUT", target: null });
       const newCtx = { ...state.context, spacePrice: val };
       dispatch({ type: "SET_CONTEXT", context: { spacePrice: val } });
-      const addressStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_address")!;
-      const addressIdx  = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_address");
+      const addressStep = PUBLISH_VARIANT_A_STEPS.find((s) => s.id === "publish_address")!;
+      const addressIdx  = PUBLISH_VARIANT_A_STEPS.findIndex((s) => s.id === "publish_address");
       emitBotMessage(addressStep, newCtx);
       dispatch({ type: "SET_PHASE", phase: "publish_address" });
       dispatch({ type: "SET_STEP_INDEX", index: addressIdx });
@@ -489,7 +530,7 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
     if (state.currentInputTarget === "email" && !isValidEmail(val)) {
       emitUserMessage(val);
       dispatch({ type: "SET_INPUT_VALUE", value: "" });
-      emitBotError("Mmm, ese correo no se ve completo. ¿Lo revisas? Debe verse como nombre@dominio.com");
+      emitBotError(getCopy("email_error", tone, state.context));
       return;
     }
 
@@ -549,7 +590,24 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
 
   // ─── Form submit handler ──────────────────────────────────────────────────────
   function handleFormSubmit(values: Record<string, string>) {
-    // Publish address form (tiene campo "calle")
+    // Variante B de publicar espacio — form unificado (tiene campo "espacio_tipo")
+    if (values.espacio_tipo !== undefined) {
+      const spaceType = values.espacio_tipo;
+      const size   = (values.tamaño  ?? "").trim();
+      const price  = (values.precio  ?? "").trim();
+      const street = (values.calle   ?? "").trim();
+      const number = (values.numero  ?? "").trim();
+      const zip    = (values.cp      ?? "").trim();
+      emitUserMessage(`${spaceType} · ${size} m² · $${price}/mes · ${street} ${number}, CP ${zip}`);
+      const newCtx = { ...state.context, spaceType, spaceSize: size, spacePrice: price, spaceStreet: street, spaceNumber: number, spaceZip: zip };
+      dispatch({ type: "SET_CONTEXT", context: { spaceType, spaceSize: size, spacePrice: price, spaceStreet: street, spaceNumber: number, spaceZip: zip } });
+      const photosStep = PUBLISH_VARIANT_B_STEPS.find((s) => s.id === "publish_photos")!;
+      emitBotMessage(photosStep, newCtx);
+      dispatch({ type: "SET_PHASE", phase: "publish_photos" });
+      return;
+    }
+
+    // Publish address form — variante A (tiene campo "calle" pero no "espacio_tipo")
     if (values.calle !== undefined) {
       const street = values.calle.trim();
       const number = (values.numero ?? "").trim();
@@ -557,8 +615,8 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
       emitUserMessage(`${street} ${number}, CP ${zip}`);
       const newCtx = { ...state.context, spaceStreet: street, spaceNumber: number, spaceZip: zip };
       dispatch({ type: "SET_CONTEXT", context: { spaceStreet: street, spaceNumber: number, spaceZip: zip } });
-      const photosStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_photos")!;
-      const photosIdx  = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_photos");
+      const photosStep = PUBLISH_VARIANT_A_STEPS.find((s) => s.id === "publish_photos")!;
+      const photosIdx  = PUBLISH_VARIANT_A_STEPS.findIndex((s) => s.id === "publish_photos");
       emitBotMessage(photosStep, newCtx);
       dispatch({ type: "SET_PHASE", phase: "publish_photos" });
       dispatch({ type: "SET_STEP_INDEX", index: photosIdx });
@@ -597,12 +655,38 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
   function handlePlatformConfirm() {
     if (platformRedirectAnswered.current) return;
     platformRedirectAnswered.current = true;
-    emitUserMessage("Confirmado ✓");
+    emitUserMessage("Abriendo Spot2 ✓");
+
+    // Variante C de publicar espacio
+    if (state.phase === "publish_redirect_c") {
+      const successStep = PUBLISH_VARIANT_C_STEPS.find((s) => s.id === "publish_success_c")!;
+      emitBotMessage(successStep, state.context, () => {
+        const doneMsg: ChatMessage = {
+          id: newId(),
+          actor: "bot",
+          type: "welcome",
+          content: getCopy("done_welcome_q", tone, state.context),
+          options: [
+            { id: "https://spot2.mx/espacios", label: "Ver mi espacio" },
+            { id: "https://spot2.mx/dashboard", label: "Ver el dashboard" },
+          ],
+          timestamp: new Date(),
+          ticks: "read",
+        };
+        setTimeout(() => {
+          dispatch({ type: "ADD_MESSAGE", message: doneMsg });
+          dispatch({ type: "SET_PHASE", phase: "publish_done" });
+        }, 800);
+      });
+      return;
+    }
+
+    // Onboarding variante C
     const confirmedStep: Step = {
       id: "c_confirmed",
       actor: "bot",
       type: "typing",
-      content: "Confirmado. Creando tu cuenta…",
+      content: getCopy("onboarding_c_confirmed", tone, state.context),
       delay: 500,
       auto: true,
     };
@@ -631,7 +715,7 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
     : state.currentInputTarget === "size" || state.currentInputTarget === "price" ? "number"
     : "text";
 
-  const isPublishFormPhase = state.phase === "publish_address";
+  const isPublishFormPhase = state.phase === "publish_address" || state.phase === "publish_form_b";
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -673,7 +757,8 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
           }
 
           if (msg.type === "form" && msg.fields) {
-            const isAddressForm = msg.fields.some((f) => f.id === "calle");
+            const isAddressForm   = msg.fields.some((f) => f.id === "calle") && !msg.fields.some((f) => f.id === "espacio_tipo");
+            const isPublishBForm  = msg.fields.some((f) => f.id === "espacio_tipo");
             return (
               <div key={msg.id}>
                 <MessageBubble message={msg} showAvatar={showAvatar} />
@@ -681,8 +766,8 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
                   fields={msg.fields}
                   onSubmit={handleFormSubmit}
                   disabled={!(state.phase === "flow" || isPublishFormPhase) || state.isTyping}
-                  title={isAddressForm ? "Ubicación del espacio" : undefined}
-                  submitLabel={isAddressForm ? "Guardar dirección" : undefined}
+                  title={isPublishBForm ? "Datos del espacio" : isAddressForm ? "Ubicación del espacio" : undefined}
+                  submitLabel={isPublishBForm ? "Guardar datos" : isAddressForm ? "Guardar dirección" : undefined}
                 />
               </div>
             );
@@ -721,7 +806,8 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
           }
 
           if (msg.type === "platformRedirect") {
-            const isAnswered = platformRedirectAnswered.current;
+            const isAnswered   = platformRedirectAnswered.current;
+            const isSpaceRedirect = startMode === "publish_space";
             return (
               <div key={msg.id}>
                 <MessageBubble message={msg} showAvatar={showAvatar} />
@@ -729,6 +815,9 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode }:
                   <PlatformRedirectCard
                     name={state.context.name}
                     email={state.context.email}
+                    mode={isSpaceRedirect ? "space" : "account"}
+                    spaceType={state.context.spaceType}
+                    spaceSize={state.context.spaceSize}
                     onConfirm={handlePlatformConfirm}
                     disabled={state.isTyping}
                   />
