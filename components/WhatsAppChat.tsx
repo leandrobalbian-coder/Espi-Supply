@@ -27,6 +27,7 @@ import {
   V1_RESENT_STEP,
   EXISTING_USER_STEPS,
   REGISTERED_EMAILS,
+  HUMAN_HANDOFF_STEP,
   type Variant,
   type VerificationMethod,
   type Step,
@@ -501,6 +502,10 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     return /^(hola|buenas|hey|sigues ahí|sigues ahi|estás ahí|estas ahí|oye|oiga|oi|hi|¿sigues ahí\??|¿hola\??)$/i.test(val.trim());
   }
 
+  function isHumanRequest(val: string) {
+    return /quiero hablar (con )?(una persona|un humano|un asesor|un agente|alguien)|hablar con (una persona|un humano|un asesor|un agente|alguien)|necesito (a )?alguien|ponme con (una persona|un humano|un asesor|alguien)|pásame (con )?(una persona|un humano|un asesor|un agente|alguien)|pasame (con )?(una persona|un asesor|un agente|alguien)|quiero (una persona|un humano|un agente|un asesor)|hablar con un humano|un agente (real|humano)|persona real|soporte humano|servicio al cliente|atención al cliente/i.test(val);
+  }
+
   // ─── Text input handler ───────────────────────────────────────────────────────
   function handleTextInput() {
     const val = state.inputValue.trim();
@@ -637,6 +642,16 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
       dispatch({ type: "SET_INPUT_VALUE", value: "" });
       const frustKey = startMode === "publish_space" ? "frustration_publish" : "frustration_onboarding";
       emitBotError(getCopy(frustKey, tone, state.context));
+      return;
+    }
+
+    // Solicitud explícita de hablar con un humano
+    if (isHumanRequest(val)) {
+      emitUserMessage(val);
+      dispatch({ type: "SET_INPUT_VALUE", value: "" });
+      emitBotMessage(HUMAN_HANDOFF_STEP, state.context, () => {
+        dispatch({ type: "SET_PHASE", phase: "bye" });
+      });
       return;
     }
 

@@ -393,6 +393,15 @@ export const REGISTERED_EMAILS = new Set([
   "already@registered.com",
 ]);
 
+export const HUMAN_HANDOFF_STEP: Step = {
+  id: "human_handoff",
+  actor: "bot",
+  type: "text",
+  content: "Te conecto con un asesor.",
+  contentKey: "human_handoff",
+  delay: 700,
+};
+
 export const EXISTING_USER_STEPS: Step[] = [
   {
     id: "existing_found",

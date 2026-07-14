@@ -423,6 +423,14 @@ export const TONED_COPY: Record<string, Record<Tone, CopyValue>> = {
     directo: (ctx) => `Seguimos, ${ctx.name}. Correo ya guardado.`,
   },
 
+  // ─── Fallback a humano ───────────────────────────────────────────────────────
+
+  human_handoff: {
+    calido:  "Claro, con gusto te conecto con alguien del equipo de Spot2 😊 En breve un asesor te escribe para ayudarte a terminar. ¡Que te vaya muy bien!",
+    neutro:  "De acuerdo. Te conecto con un asesor de Spot2. Recibirás respuesta en breve. Gracias por tu paciencia.",
+    directo: "Conectando con un asesor de Spot2. Te escribe pronto.",
+  },
+
   // ─── Usuario existente ────────────────────────────────────────────────────────
 
   existing_user_found: {
