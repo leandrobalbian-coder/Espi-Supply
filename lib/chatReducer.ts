@@ -8,10 +8,12 @@ import type { Variant, UserProfile, Step } from "./flows";
 export interface ChatMessage {
   id: string;
   actor: "bot" | "user";
-  type: "text" | "quickReply" | "userInput" | "form" | "typing" | "cta" | "welcome" | "platformRedirect" | "success";
+  type: "text" | "quickReply" | "userInput" | "form" | "typing" | "cta" | "welcome" | "platformRedirect" | "success" | "list" | "photoUpload";
   content: string;
   options?: { id: string; label: string }[];
-  fields?: { id: string; label: string; type: string; placeholder: string }[];
+  fields?: { id: string; label: string; type: string; placeholder: string; options?: string[] }[];
+  listItems?: { id: string; title: string; description?: string }[];
+  listButtonLabel?: string;
   timestamp: Date;
   ticks: "sent" | "delivered" | "read";
 }
@@ -26,16 +28,29 @@ export interface ChatState {
     | "ask_profile"
     | "success"
     | "welcome"
-    | "done";
+    | "done"
+    | "publish_type"
+    | "publish_size"
+    | "publish_price"
+    | "publish_address"
+    | "publish_photos"
+    | "publish_confirm"
+    | "publish_done";
   stepIndex: number;
   context: {
     name: string;
     email: string;
     profile: UserProfile | null;
+    spaceType?: string;
+    spaceSize?: string;
+    spacePrice?: string;
+    spaceStreet?: string;
+    spaceNumber?: string;
+    spaceZip?: string;
   };
   isTyping: boolean;
   awaitingInput: boolean;
-  currentInputTarget: "name" | "email" | "verif_code" | null;
+  currentInputTarget: "name" | "email" | "verif_code" | "size" | "price" | null;
   inputValue: string;
   correctionMode: "name" | "email" | null;
 }
@@ -55,7 +70,7 @@ export const initialState: ChatState = {
 export type ChatAction =
   | { type: "ADD_MESSAGE"; message: ChatMessage }
   | { type: "SET_TYPING"; value: boolean }
-  | { type: "SET_AWAITING_INPUT"; target: "name" | "email" | "verif_code" | null }
+  | { type: "SET_AWAITING_INPUT"; target: "name" | "email" | "verif_code" | "size" | "price" | null }
   | { type: "SET_INPUT_VALUE"; value: string }
   | { type: "SET_PHASE"; phase: ChatState["phase"] }
   | { type: "SET_STEP_INDEX"; index: number }

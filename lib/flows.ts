@@ -17,7 +17,9 @@ export type StepType =
   | "cta"
   | "welcome"
   | "platformRedirect"
-  | "success";
+  | "success"
+  | "list"
+  | "photoUpload";
 
 export type Actor = "bot" | "user";
 
@@ -26,11 +28,20 @@ export interface QuickReply {
   label: string;
 }
 
+export interface ListItem {
+  id: string;
+  title: string;       // límite Meta: ≤ 24 chars
+  description?: string; // límite Meta: ≤ 72 chars
+}
+
 export interface FormField {
   id: string;
   label: string;
-  type: "text" | "email";
+  // Meta WhatsApp Flows soporta: text, email, phone, number, date, y single-select (dropdown).
+  // "select" aquí simula el single-select nativo de Flows. En producción requiere JSON schema registrado en Meta Business.
+  type: "text" | "email" | "select";
   placeholder: string;
+  options?: string[]; // solo para type: "select"
 }
 
 export interface Step {
@@ -41,6 +52,8 @@ export interface Step {
   content: string | ((ctx: ConversationContext) => string);
   options?: QuickReply[];
   fields?: FormField[];
+  listItems?: ListItem[];       // para type: "list"
+  listButtonLabel?: string;     // para type: "list" — límite Meta: ≤ 20 chars
   delay?: number; // ms antes de mostrar (simula typing)
   /** Si requiere acción del usuario para avanzar */
   requiresInput?: boolean;
@@ -53,6 +66,12 @@ export interface ConversationContext {
   email: string;
   profile: UserProfile | null;
   variantAnswered?: boolean;
+  spaceType?: string;
+  spaceSize?: string;
+  spacePrice?: string;
+  spaceStreet?: string;
+  spaceNumber?: string;
+  spaceZip?: string;
 }
 
 // ─── Pasos compartidos de apertura ───────────────────────────────────────────
@@ -253,7 +272,19 @@ export const VARIANT_A_STEPS: Step[] = [
   },
 ];
 
-// ─── Variante B — Formulario nativo ──────────────────────────────────────────
+// ─── Variante B — Formulario nativo ⭐ VARIANTE RECOMENDADA ──────────────────
+//
+// Por qué B es la de menor fricción:
+//   1. Un solo WhatsApp Flow (una pantalla) captura nombre + correo + perfil juntos.
+//      Sin mensajes de ida y vuelta — el usuario no sale del contexto de WhatsApp.
+//   2. Validación nativa en el form antes de enviar (vs. corrección post-envío en A).
+//   3. Elimina el paso extra de "¿Cuál es tu perfil?" — queda dentro del mismo form.
+//   4. Meta WhatsApp Flows permite hasta 10 campos por pantalla y hasta 3 pantallas
+//      por flow. Aquí usamos 1 pantalla con 3 campos: el mínimo absoluto para una
+//      cuenta válida + segmentación de bienvenida.
+//
+// Variante A: conversacional clásico — más natural pero más pasos.
+// Variante C: pre-rellenado en plataforma — fricción media por cambio de contexto.
 
 export const VARIANT_B_STEPS: Step[] = [
   {
@@ -261,7 +292,7 @@ export const VARIANT_B_STEPS: Step[] = [
     actor: "bot",
     type: "text",
     content:
-      "Para agilizarlo, te comparto un formulario rápido. Solo llena tu nombre y correo y en un momento tienes tu cuenta.",
+      "Para agilizarlo, te comparto un formulario rápido. Solo llena tus datos y en un momento tienes tu cuenta.",
     delay: 800,
   },
   {
@@ -273,6 +304,14 @@ export const VARIANT_B_STEPS: Step[] = [
     fields: [
       { id: "name", label: "Nombre completo", type: "text", placeholder: "Ej. María García" },
       { id: "email", label: "Correo electrónico", type: "email", placeholder: "Ej. maria@empresa.com" },
+      // single-select: simula WhatsApp Flows SingleChoiceItem. Máx ~24 chars por opción en Flows real.
+      {
+        id: "profile",
+        label: "Tipo de cuenta",
+        type: "select",
+        placeholder: "Selecciona tu perfil",
+        options: ["Soy propietario", "Soy broker"],
+      },
     ],
     requiresInput: true,
   },
@@ -313,5 +352,107 @@ export const VARIANT_C_STEPS: Step[] = [
       `Perfecto, ${ctx.name}. Te mando a la plataforma con tus datos ya listos — solo confirma y tu cuenta queda creada al instante.`,
     delay: 800,
     requiresInput: true,
+  },
+];
+
+// ─── Flujo de publicación de espacio ─────────────────────────────────────────
+
+// 8 tipos reales de Spot2 — dentro del límite de 10 ítems de Meta List Message
+export const SPACE_TYPES: ListItem[] = [
+  { id: "oficina",     title: "Oficina",           description: "Espacios para trabajo corporativo" },
+  { id: "local",       title: "Local Comercial",   description: "Planta baja, frente a calle" },
+  { id: "bodega",      title: "Bodega",             description: "Almacenaje y logística" },
+  { id: "nave",        title: "Nave Industrial",   description: "Producción o manufactura" },
+  { id: "terreno",     title: "Terreno",            description: "Para construir o estacionar" },
+  { id: "corporativo", title: "Corporativo",        description: "Torre o campus empresarial" },
+  { id: "parque",      title: "Parque Industrial",  description: "Dentro de parque industrial" },
+  { id: "flex",        title: "Flex / Coworking",  description: "Espacio compartido o flexible" },
+];
+
+export const PUBLISH_SPACE_STEPS: Step[] = [
+  {
+    id: "publish_intro",
+    actor: "bot",
+    type: "text",
+    content:
+      "¡Genial! Publicar un espacio toma menos de 5 minutos. Solo necesito unos datos básicos — el resto lo completás en la plataforma con todo pre-cargado.",
+    delay: 800,
+  },
+  {
+    id: "publish_type",
+    actor: "bot",
+    type: "list",
+    content: "¿Qué tipo de espacio es?",
+    delay: 700,
+    listItems: SPACE_TYPES,
+    listButtonLabel: "Ver tipos",
+    requiresInput: true,
+  },
+  {
+    id: "publish_size",
+    actor: "bot",
+    type: "userInput",
+    content: "¿Cuántos metros cuadrados tiene? Solo el número.",
+    delay: 700,
+    requiresInput: true,
+  },
+  {
+    id: "publish_price",
+    actor: "bot",
+    type: "userInput",
+    content: "¿Y el precio mensual en pesos? Solo el número, sin comas ni símbolo.",
+    delay: 700,
+    requiresInput: true,
+  },
+  {
+    id: "publish_address",
+    actor: "bot",
+    type: "form",
+    content: "¿Dónde está ubicado el espacio?",
+    delay: 700,
+    fields: [
+      { id: "calle",  label: "Calle",           type: "text", placeholder: "Ej. Insurgentes Sur" },
+      { id: "numero", label: "Número exterior", type: "text", placeholder: "Ej. 1234" },
+      { id: "cp",     label: "Código postal",   type: "text", placeholder: "Ej. 03810" },
+    ],
+    requiresInput: true,
+  },
+  {
+    id: "publish_photos",
+    actor: "bot",
+    type: "photoUpload",
+    content:
+      "Ya casi 📸 Mandame fotos del espacio — mínimo 3 para que tu anuncio destaque. Entre más, mejor.",
+    delay: 800,
+    requiresInput: true,
+  },
+  {
+    id: "publish_confirm",
+    actor: "bot",
+    type: "quickReply",
+    content: (ctx) =>
+      `Perfecto, acá el resumen:\n\n• Tipo: ${ctx.spaceType ?? "—"}\n• Tamaño: ${ctx.spaceSize ?? "—"} m²\n• Precio: $${ctx.spacePrice ?? "—"}/mes\n• Dirección: ${ctx.spaceStreet ?? "—"} ${ctx.spaceNumber ?? ""}, CP ${ctx.spaceZip ?? "—"}\n• Fotos: ✓\n\n¿Lo publicamos?`,
+    delay: 900,
+    options: [
+      { id: "space_publish", label: "Publicar" },
+      { id: "space_edit",    label: "Editar datos" },
+    ],
+    requiresInput: true,
+  },
+  {
+    id: "publish_creating",
+    actor: "bot",
+    type: "typing",
+    content: "Publicando tu espacio…",
+    delay: 400,
+    auto: true,
+  },
+  {
+    id: "publish_success",
+    actor: "bot",
+    type: "success",
+    content: (ctx) =>
+      `¡Listo${ctx.name ? `, ${ctx.name}` : ""}! Tu espacio ya está en borrador 🎉 Entra a la plataforma para agregar descripción, más fotos y publicarlo.`,
+    delay: 1000,
   },
 ];

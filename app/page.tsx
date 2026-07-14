@@ -2,6 +2,7 @@
 import { useState } from "react";
 import PhoneMockup from "@/components/PhoneMockup";
 import type { Variant, VerificationMethod } from "@/lib/flows";
+import type { StartMode } from "@/components/WhatsAppChat";
 import { AGENT_NAME } from "@/lib/persona";
 
 const VARIANTS: { id: Variant; label: string; tagline: string }[] = [
@@ -18,9 +19,15 @@ const VERIFICATION_METHODS: { id: VerificationMethod; label: string; tagline: st
 
 const DEMO_CODE = "123456";
 
+const DEMO_MODES: { id: StartMode; label: string; tagline: string }[] = [
+  { id: "onboarding",    label: "Crear cuenta",      tagline: "Onboarding completo" },
+  { id: "publish_space", label: "Publicar espacio",   tagline: "Flujo de publicación" },
+];
+
 export default function Home() {
   const [variant, setVariant] = useState<Variant>("A");
   const [verificationMethod, setVerificationMethod] = useState<VerificationMethod>("V0");
+  const [startMode, setStartMode] = useState<StartMode>("onboarding");
   const [showIntro, setShowIntro] = useState(true);
 
   if (showIntro) {
@@ -35,7 +42,7 @@ export default function Home() {
           <span className="text-[#FFAA00] font-bold text-[20px] tracking-tight">Spot2</span>
           <div className="w-px h-5 bg-white/20" />
           <span className="text-white/80 text-[13px] font-medium">
-            {AGENT_NAME} — Supply Agent · Demo de creación de cuenta
+            {AGENT_NAME} — Supply Agent · {startMode === "publish_space" ? "Flujo de publicación" : "Demo de creación de cuenta"}
           </span>
         </div>
         <span className="text-[11px] text-white/40 font-medium hidden md:block">
@@ -48,6 +55,41 @@ export default function Home() {
         {/* Control panel */}
         <aside className="w-72 flex-shrink-0 bg-white border-r border-[#E5E5E5] flex flex-col overflow-y-auto">
           <div className="p-5 flex flex-col gap-6">
+            {/* Mode selector */}
+            <section>
+              <h2 className="text-[11px] font-bold text-[#9898A2] uppercase tracking-widest mb-3">
+                Modo demo
+              </h2>
+              <div className="flex flex-col gap-2">
+                {DEMO_MODES.map((m) => (
+                  <button
+                    key={m.id}
+                    onClick={() => setStartMode(m.id)}
+                    className={`
+                      w-full text-left px-4 py-3 rounded-xl border-2 transition-all duration-150
+                      focus:outline-none focus:ring-2 focus:ring-[#FFAA00]/40
+                      ${startMode === m.id
+                        ? "border-[#FFAA00] bg-[#FFFBF0]"
+                        : "border-[#E5E5E5] bg-white hover:border-[#FFAA00]/40"
+                      }
+                    `}
+                  >
+                    <div className="flex items-center gap-2 mb-0.5">
+                      <span className={`text-[13px] font-bold ${startMode === m.id ? "text-[#1C1F2A]" : "text-[#424552]"}`}>
+                        {m.label}
+                      </span>
+                      {startMode === m.id && (
+                        <span className="text-[10px] font-bold text-[#FFAA00] bg-[#FFAA00]/10 px-2 py-0.5 rounded-full">
+                          Activo
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[12px] text-[#737373]">{m.tagline}</p>
+                  </button>
+                ))}
+              </div>
+            </section>
+
             {/* Variant selector */}
             <section>
               <h2 className="text-[11px] font-bold text-[#9898A2] uppercase tracking-widest mb-3">
@@ -164,7 +206,7 @@ export default function Home() {
 
         {/* Phone mockup */}
         <main className="flex-1 overflow-hidden bg-[#F5F5F5]">
-          <PhoneMockup variant={variant} verificationMethod={verificationMethod} />
+          <PhoneMockup variant={variant} verificationMethod={verificationMethod} startMode={startMode} />
         </main>
       </div>
     </div>

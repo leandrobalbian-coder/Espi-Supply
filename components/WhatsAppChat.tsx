@@ -11,6 +11,7 @@ import {
   VARIANT_A_STEPS,
   VARIANT_B_STEPS,
   VARIANT_C_STEPS,
+  PUBLISH_SPACE_STEPS,
   ASK_PROFILE_STEP,
   SUCCESS_STEP,
   SUCCESS_STEP_V2,
@@ -32,10 +33,15 @@ import TypingIndicator from "./TypingIndicator";
 import QuickReplies from "./QuickReplies";
 import WhatsAppForm from "./WhatsAppForm";
 import PlatformRedirectCard from "./PlatformRedirectCard";
+import ListMessage from "./ListMessage";
+import PhotoUploadStep from "./PhotoUploadStep";
+
+export type StartMode = "onboarding" | "publish_space";
 
 interface Props {
   variant: Variant;
   verificationMethod: VerificationMethod;
+  startMode: StartMode;
 }
 
 let msgIdCounter = 0;
@@ -47,12 +53,13 @@ function resolveContent(step: Step, ctx: ConversationContext): string {
 
 const DEMO_CODE = "123456";
 
-export default function WhatsAppChat({ variant, verificationMethod }: Props) {
+export default function WhatsAppChat({ variant, verificationMethod, startMode }: Props) {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const answeredMessages = useRef<Set<string>>(new Set());
   const platformRedirectAnswered = useRef(false);
+  const photosCompletedMessages = useRef<Set<string>>(new Set());
   const verificationCallback = useRef<(() => void) | null>(null);
 
   // ─── Auto-scroll ────────────────────────────────────────────────────────────
@@ -60,14 +67,15 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [state.messages, state.isTyping]);
 
-  // ─── Reset on variant or verificationMethod change ───────────────────────────
+  // ─── Reset on key-prop change (handled by parent key={}) ─────────────────────
   useEffect(() => {
     answeredMessages.current.clear();
     platformRedirectAnswered.current = false;
+    photosCompletedMessages.current.clear();
     verificationCallback.current = null;
     dispatch({ type: "RESET" });
     msgIdCounter = 0;
-  }, [variant, verificationMethod]);
+  }, [variant, verificationMethod, startMode]);
 
   // ─── Bot message emitter ─────────────────────────────────────────────────────
   const emitBotMessage = useCallback(
@@ -84,6 +92,8 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
             content: resolveContent(step, ctx),
             options: step.options,
             fields: step.fields,
+            listItems: step.listItems,
+            listButtonLabel: step.listButtonLabel,
             timestamp: new Date(),
             ticks: "read",
           },
@@ -119,7 +129,6 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
         onComplete();
         return;
       }
-      // V1 — OTP
       const askStep = V1_ASK_CODE_STEP(ctx.email);
       emitBotMessage(askStep, ctx, () => {
         dispatch({ type: "SET_AWAITING_INPUT", target: "verif_code" });
@@ -130,7 +139,7 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
     [verificationMethod, emitBotMessage]
   );
 
-  // ─── Proceed to profile (used by all variants after data collection) ──────────
+  // ─── Proceed to profile (all variants after data collection) ─────────────────
   const proceedToProfile = useCallback(
     (ctx: ConversationContext, preStep?: Step) => {
       const doProfile = () => {
@@ -147,7 +156,49 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
     [emitBotMessage, runVerification]
   );
 
-  // ─── Flow orchestrator ───────────────────────────────────────────────────────
+  // ─── Success (onboarding) ────────────────────────────────────────────────────
+  const runSuccess = useCallback(
+    (ctx: ConversationContext) => {
+      const profile = ctx.profile ?? "propietario";
+      const successStep = verificationMethod === "V2" ? SUCCESS_STEP_V2 : SUCCESS_STEP;
+      emitBotMessage(successStep, ctx, () => {
+        const welcomeMsg: ChatMessage = {
+          id: newId(),
+          actor: "bot",
+          type: "welcome",
+          content: WELCOME_MESSAGES[profile as UserProfile],
+          options: WELCOME_CTAS[profile as UserProfile].map((c) => ({ id: c.url, label: c.label })),
+          timestamp: new Date(),
+          ticks: "read",
+        };
+        setTimeout(() => {
+          dispatch({ type: "ADD_MESSAGE", message: welcomeMsg });
+          dispatch({ type: "SET_PHASE", phase: "done" });
+        }, 1000);
+      });
+      dispatch({ type: "SET_PHASE", phase: "success" });
+    },
+    [emitBotMessage, verificationMethod]
+  );
+
+  // ─── Publish space flow ───────────────────────────────────────────────────────
+  const runPublishSpaceFlow = useCallback(
+    (ctx: ConversationContext) => {
+      const introStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_intro")!;
+      const typeStep  = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_type")!;
+      const typeIdx   = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_type");
+
+      emitBotMessage(introStep, ctx, () => {
+        emitBotMessage(typeStep, ctx);
+        dispatch({ type: "SET_PHASE", phase: "publish_type" });
+        dispatch({ type: "SET_STEP_INDEX", index: typeIdx });
+        dispatch({ type: "SET_CONTEXT", context: ctx });
+      });
+    },
+    [emitBotMessage]
+  );
+
+  // ─── Variant flow orchestrator ───────────────────────────────────────────────
   const runVariantFlow = useCallback(
     (ctx: ConversationContext) => {
       const steps =
@@ -199,32 +250,7 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
     [variant, emitBotMessage, proceedToProfile]
   );
 
-  // ─── Success ──────────────────────────────────────────────────────────────────
-  const runSuccess = useCallback(
-    (ctx: ConversationContext) => {
-      const profile = ctx.profile ?? "propietario";
-      const successStep = verificationMethod === "V2" ? SUCCESS_STEP_V2 : SUCCESS_STEP;
-      emitBotMessage(successStep, ctx, () => {
-        const welcomeMsg: ChatMessage = {
-          id: newId(),
-          actor: "bot",
-          type: "welcome",
-          content: WELCOME_MESSAGES[profile as UserProfile],
-          options: WELCOME_CTAS[profile as UserProfile].map((c) => ({ id: c.url, label: c.label })),
-          timestamp: new Date(),
-          ticks: "read",
-        };
-        setTimeout(() => {
-          dispatch({ type: "ADD_MESSAGE", message: welcomeMsg });
-          dispatch({ type: "SET_PHASE", phase: "done" });
-        }, 1000);
-      });
-      dispatch({ type: "SET_PHASE", phase: "success" });
-    },
-    [emitBotMessage, verificationMethod]
-  );
-
-  // ─── Start conversation on mount ─────────────────────────────────────────────
+  // ─── Start conversation ───────────────────────────────────────────────────────
   useEffect(() => {
     let cancelled = false;
     const timers: ReturnType<typeof setTimeout>[] = [];
@@ -238,39 +264,53 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
       dispatch({ type: "RESET" });
       answeredMessages.current.clear();
       platformRedirectAnswered.current = false;
+      photosCompletedMessages.current.clear();
       verificationCallback.current = null;
       msgIdCounter = 0;
     }
-    let i = 0;
-    const ctx = { name: "", email: "", profile: null };
-    function runOpening() {
-      if (cancelled || i >= OPENING_STEPS.length) return;
-      const step = OPENING_STEPS[i];
+
+    const ctx: ConversationContext = { name: "", email: "", profile: null };
+
+    if (startMode === "publish_space") {
       dispatch({ type: "SET_TYPING", value: true });
-      safeTimeout(() => {
+      const t = setTimeout(() => {
         if (cancelled) return;
         dispatch({ type: "SET_TYPING", value: false });
-        dispatch({
-          type: "ADD_MESSAGE",
-          message: {
-            id: `msg-${++msgIdCounter}`,
-            actor: "bot" as const,
-            type: step.type as ChatMessage["type"],
-            content: typeof step.content === "function" ? step.content(ctx) : step.content,
-            options: step.options,
-            timestamp: new Date(),
-            ticks: "read" as const,
-          },
-        });
-        if (step.requiresInput) {
-          dispatch({ type: "SET_PHASE", phase: "opening" });
-        } else { i++; runOpening(); }
-      }, step.delay ?? 800);
+        runPublishSpaceFlow(ctx);
+      }, 400);
+      timers.push(t);
+    } else {
+      let i = 0;
+      function runOpening() {
+        if (cancelled || i >= OPENING_STEPS.length) return;
+        const step = OPENING_STEPS[i];
+        dispatch({ type: "SET_TYPING", value: true });
+        safeTimeout(() => {
+          if (cancelled) return;
+          dispatch({ type: "SET_TYPING", value: false });
+          dispatch({
+            type: "ADD_MESSAGE",
+            message: {
+              id: `msg-${++msgIdCounter}`,
+              actor: "bot" as const,
+              type: step.type as ChatMessage["type"],
+              content: typeof step.content === "function" ? step.content(ctx) : step.content,
+              options: step.options,
+              timestamp: new Date(),
+              ticks: "read" as const,
+            },
+          });
+          if (step.requiresInput) {
+            dispatch({ type: "SET_PHASE", phase: "opening" });
+          } else { i++; runOpening(); }
+        }, step.delay ?? 800);
+      }
+      safeTimeout(runOpening, 400);
     }
-    safeTimeout(runOpening, 400);
+
     return cancelAll;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variant, verificationMethod]);
+  }, [variant, verificationMethod, startMode]);
 
   // ─── Quick reply handler ──────────────────────────────────────────────────────
   function handleQuickReply(msgId: string, optId: string, optLabel: string) {
@@ -307,7 +347,6 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
           dispatch({ type: "SET_CORRECTION_MODE", mode: "name" });
         });
       } else if (optId === "resend_code") {
-        // V1 — reenviar OTP
         emitBotMessage(V1_RESENT_STEP, ctx, () => {
           dispatch({ type: "SET_AWAITING_INPUT", target: "verif_code" });
         });
@@ -319,7 +358,78 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
       const profile = optId as UserProfile;
       dispatch({ type: "SET_CONTEXT", context: { profile } });
       runSuccess({ ...ctx, profile });
+      return;
     }
+
+    if (state.phase === "publish_confirm") {
+      if (optId === "space_publish") {
+        const creatingStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_creating")!;
+        const successStep  = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_success")!;
+        emitBotMessage(creatingStep, ctx, () => {
+          emitBotMessage(successStep, ctx, () => {
+            const doneMsg: ChatMessage = {
+              id: newId(),
+              actor: "bot",
+              type: "welcome",
+              content: "¿Qué hacemos ahora?",
+              options: [
+                { id: "https://spot2.mx/espacios", label: "Ver mi espacio" },
+                { id: "https://spot2.mx/dashboard", label: "Ver el dashboard" },
+              ],
+              timestamp: new Date(),
+              ticks: "read",
+            };
+            setTimeout(() => {
+              dispatch({ type: "ADD_MESSAGE", message: doneMsg });
+              dispatch({ type: "SET_PHASE", phase: "publish_done" });
+            }, 800);
+          });
+        });
+      } else if (optId === "space_edit") {
+        // Reinicia desde tipo de espacio
+        const typeStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_type")!;
+        const typeIdx  = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_type");
+        emitBotMessage(
+          { id: "edit_restart", actor: "bot", type: "text", content: "Claro, empecemos de nuevo. ¿Qué tipo de espacio es?", delay: 600 },
+          ctx,
+          () => {
+            emitBotMessage(typeStep, ctx);
+            dispatch({ type: "SET_PHASE", phase: "publish_type" });
+            dispatch({ type: "SET_STEP_INDEX", index: typeIdx });
+          }
+        );
+      }
+      return;
+    }
+  }
+
+  // ─── List select handler ──────────────────────────────────────────────────────
+  function handleListSelect(msgId: string, itemId: string, itemTitle: string) {
+    if (answeredMessages.current.has(msgId)) return;
+    answeredMessages.current.add(msgId);
+    emitUserMessage(itemTitle);
+
+    const newCtx = { ...state.context, spaceType: itemTitle };
+    dispatch({ type: "SET_CONTEXT", context: { spaceType: itemTitle } });
+
+    const sizeStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_size")!;
+    const sizeIdx  = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_size");
+    emitBotMessage(sizeStep, newCtx, () => {
+      dispatch({ type: "SET_AWAITING_INPUT", target: "size" });
+      dispatch({ type: "SET_PHASE", phase: "publish_size" });
+      dispatch({ type: "SET_STEP_INDEX", index: sizeIdx });
+    });
+  }
+
+  // ─── Photos complete handler ──────────────────────────────────────────────────
+  function handlePhotosComplete(msgId: string) {
+    photosCompletedMessages.current.add(msgId);
+    const ctx = state.context;
+    const confirmStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_confirm")!;
+    const confirmIdx  = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_confirm");
+    emitBotMessage(confirmStep, ctx);
+    dispatch({ type: "SET_PHASE", phase: "publish_confirm" });
+    dispatch({ type: "SET_STEP_INDEX", index: confirmIdx });
   }
 
   // ─── Text input handler ───────────────────────────────────────────────────────
@@ -327,7 +437,7 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
     const val = state.inputValue.trim();
     if (!val) return;
 
-    // V1 — OTP code input
+    // V1 — OTP
     if (state.currentInputTarget === "verif_code") {
       emitUserMessage(val);
       dispatch({ type: "SET_INPUT_VALUE", value: "" });
@@ -343,7 +453,39 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
       return;
     }
 
-    // Validar correo antes de aceptar
+    // Publish flow — m²
+    if (state.phase === "publish_size") {
+      emitUserMessage(val);
+      dispatch({ type: "SET_INPUT_VALUE", value: "" });
+      dispatch({ type: "SET_AWAITING_INPUT", target: null });
+      const newCtx = { ...state.context, spaceSize: val };
+      dispatch({ type: "SET_CONTEXT", context: { spaceSize: val } });
+      const priceStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_price")!;
+      const priceIdx  = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_price");
+      emitBotMessage(priceStep, newCtx, () => {
+        dispatch({ type: "SET_AWAITING_INPUT", target: "price" });
+        dispatch({ type: "SET_PHASE", phase: "publish_price" });
+        dispatch({ type: "SET_STEP_INDEX", index: priceIdx });
+      });
+      return;
+    }
+
+    // Publish flow — precio
+    if (state.phase === "publish_price") {
+      emitUserMessage(val);
+      dispatch({ type: "SET_INPUT_VALUE", value: "" });
+      dispatch({ type: "SET_AWAITING_INPUT", target: null });
+      const newCtx = { ...state.context, spacePrice: val };
+      dispatch({ type: "SET_CONTEXT", context: { spacePrice: val } });
+      const addressStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_address")!;
+      const addressIdx  = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_address");
+      emitBotMessage(addressStep, newCtx);
+      dispatch({ type: "SET_PHASE", phase: "publish_address" });
+      dispatch({ type: "SET_STEP_INDEX", index: addressIdx });
+      return;
+    }
+
+    // Validar correo
     if (state.currentInputTarget === "email" && !isValidEmail(val)) {
       emitUserMessage(val);
       dispatch({ type: "SET_INPUT_VALUE", value: "" });
@@ -358,7 +500,7 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
     dispatch({ type: "SET_CONTEXT", context: { [target ?? "name"]: val } });
     dispatch({ type: "SET_AWAITING_INPUT", target: null });
 
-    // Corrección granular → re-confirmar
+    // Corrección granular
     if (state.correctionMode !== null) {
       dispatch({ type: "SET_CORRECTION_MODE", mode: null });
       emitBotMessage(A_RECONFIRM_STEP, newCtx);
@@ -366,7 +508,7 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
       return;
     }
 
-    // Flujo normal
+    // Flujo normal (variantes A/B/C)
     const steps =
       variant === "A" ? VARIANT_A_STEPS : variant === "B" ? VARIANT_B_STEPS : VARIANT_C_STEPS;
     const nextStepIdx = state.stepIndex + 1;
@@ -405,14 +547,51 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
     }
   }
 
+  // ─── Form submit handler ──────────────────────────────────────────────────────
   function handleFormSubmit(values: Record<string, string>) {
+    // Publish address form (tiene campo "calle")
+    if (values.calle !== undefined) {
+      const street = values.calle.trim();
+      const number = (values.numero ?? "").trim();
+      const zip    = (values.cp ?? "").trim();
+      emitUserMessage(`${street} ${number}, CP ${zip}`);
+      const newCtx = { ...state.context, spaceStreet: street, spaceNumber: number, spaceZip: zip };
+      dispatch({ type: "SET_CONTEXT", context: { spaceStreet: street, spaceNumber: number, spaceZip: zip } });
+      const photosStep = PUBLISH_SPACE_STEPS.find((s) => s.id === "publish_photos")!;
+      const photosIdx  = PUBLISH_SPACE_STEPS.findIndex((s) => s.id === "publish_photos");
+      emitBotMessage(photosStep, newCtx);
+      dispatch({ type: "SET_PHASE", phase: "publish_photos" });
+      dispatch({ type: "SET_STEP_INDEX", index: photosIdx });
+      return;
+    }
+
+    // Variante B — crear cuenta
     const name = values["name"] ?? "";
     const email = values["email"] ?? "";
-    emitUserMessage(`${name} · ${email}`);
-    const newCtx = { ...state.context, name, email };
-    dispatch({ type: "SET_CONTEXT", context: { name, email } });
+    const profileRaw = values["profile"] ?? "";
+    const profile: UserProfile | null =
+      profileRaw === "Soy propietario" ? "propietario"
+      : profileRaw === "Soy broker" ? "broker"
+      : null;
+
+    const summary = profile ? `${name} · ${email} · ${profileRaw}` : `${name} · ${email}`;
+    emitUserMessage(summary);
+
+    const newCtx = { ...state.context, name, email, profile };
+    dispatch({ type: "SET_CONTEXT", context: { name, email, profile } });
+
     const receivedStep = VARIANT_B_STEPS.find((s) => s.id === "b_received");
-    proceedToProfile(newCtx, receivedStep);
+
+    if (profile) {
+      const doSuccess = () => runSuccess(newCtx);
+      if (receivedStep) {
+        emitBotMessage(receivedStep, newCtx, doSuccess);
+      } else {
+        doSuccess();
+      }
+    } else {
+      proceedToProfile(newCtx, receivedStep);
+    }
   }
 
   function handlePlatformConfirm() {
@@ -430,22 +609,33 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
     proceedToProfile(state.context, confirmedStep);
   }
 
-  const isDone = state.phase === "done" || state.phase === "bye";
+  // ─── Welcome CTA action dispatch ──────────────────────────────────────────────
+  function handleWelcomeCTAAction(action: string) {
+    if (action === "publish_space") {
+      runPublishSpaceFlow(state.context);
+    }
+  }
+
+  const isDone = state.phase === "done" || state.phase === "bye" || state.phase === "publish_done";
   const showInput = state.awaitingInput && !isDone;
 
   const inputPlaceholder =
-    state.currentInputTarget === "verif_code"
-      ? "Escribe el código de 6 dígitos…"
-      : state.currentInputTarget === "name"
-        ? "Escribe tu nombre…"
-        : "Escribe tu correo…";
+    state.currentInputTarget === "verif_code" ? "Escribe el código de 6 dígitos…"
+    : state.currentInputTarget === "name"      ? "Escribe tu nombre…"
+    : state.currentInputTarget === "size"      ? "Ej. 250"
+    : state.currentInputTarget === "price"     ? "Ej. 25000"
+    : "Escribe tu correo…";
 
   const inputType =
-    state.currentInputTarget === "email" ? "email" : "text";
+    state.currentInputTarget === "email" ? "email"
+    : state.currentInputTarget === "size" || state.currentInputTarget === "price" ? "number"
+    : "text";
+
+  const isPublishFormPhase = state.phase === "publish_address";
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-full w-full">
+    <div className="flex flex-col h-full w-full relative">
       {/* Chat header */}
       <div className="flex items-center gap-3 px-4 py-3 bg-[#1C1F2A] shadow-md flex-shrink-0">
         <EspiAvatar size={38} />
@@ -483,14 +673,49 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
           }
 
           if (msg.type === "form" && msg.fields) {
+            const isAddressForm = msg.fields.some((f) => f.id === "calle");
             return (
               <div key={msg.id}>
                 <MessageBubble message={msg} showAvatar={showAvatar} />
                 <WhatsAppForm
                   fields={msg.fields}
                   onSubmit={handleFormSubmit}
-                  disabled={state.phase !== "flow" || state.isTyping}
+                  disabled={!(state.phase === "flow" || isPublishFormPhase) || state.isTyping}
+                  title={isAddressForm ? "Ubicación del espacio" : undefined}
+                  submitLabel={isAddressForm ? "Guardar dirección" : undefined}
                 />
+              </div>
+            );
+          }
+
+          if (msg.type === "list" && msg.listItems) {
+            const isAnswered = answeredMessages.current.has(msg.id);
+            return (
+              <div key={msg.id}>
+                <MessageBubble message={msg} showAvatar={showAvatar} />
+                {!isAnswered && (
+                  <ListMessage
+                    items={msg.listItems}
+                    buttonLabel={msg.listButtonLabel ?? "Ver opciones"}
+                    onSelect={(id, title) => handleListSelect(msg.id, id, title)}
+                    disabled={state.isTyping}
+                  />
+                )}
+              </div>
+            );
+          }
+
+          if (msg.type === "photoUpload") {
+            const isAnswered = photosCompletedMessages.current.has(msg.id);
+            return (
+              <div key={msg.id}>
+                <MessageBubble message={msg} showAvatar={showAvatar} />
+                {!isAnswered && (
+                  <PhotoUploadStep
+                    onComplete={() => handlePhotosComplete(msg.id)}
+                    disabled={state.phase !== "publish_photos" || state.isTyping}
+                  />
+                )}
               </div>
             );
           }
@@ -517,17 +742,30 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
               <div key={msg.id}>
                 <MessageBubble message={msg} showAvatar={showAvatar} />
                 <div className="flex flex-col gap-2 mt-2 mb-2 px-2">
-                  {msg.options.map((opt) => (
-                    <a
-                      key={opt.id}
-                      href={opt.id}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block w-full text-center py-3 rounded-full bg-[#FFAA00] text-[#1C1F2A] text-[14px] font-bold hover:bg-[#E69900] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-[#FFAA00]/40 min-h-[44px] flex items-center justify-center"
-                    >
-                      {opt.label}
-                    </a>
-                  ))}
+                  {msg.options.map((opt) => {
+                    if (opt.id.startsWith("action:")) {
+                      return (
+                        <button
+                          key={opt.id}
+                          onClick={() => handleWelcomeCTAAction(opt.id.slice(7))}
+                          className="block w-full text-center py-3 rounded-full bg-[#FFAA00] text-[#1C1F2A] text-[14px] font-bold hover:bg-[#E69900] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-[#FFAA00]/40 min-h-[44px] flex items-center justify-center"
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    }
+                    return (
+                      <a
+                        key={opt.id}
+                        href={opt.id}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block w-full text-center py-3 rounded-full bg-[#FFAA00] text-[#1C1F2A] text-[14px] font-bold hover:bg-[#E69900] transition-all duration-150 focus:outline-none focus:ring-2 focus:ring-[#FFAA00]/40 min-h-[44px] flex items-center justify-center"
+                      >
+                        {opt.label}
+                      </a>
+                    );
+                  })}
                 </div>
               </div>
             );
@@ -540,7 +778,7 @@ export default function WhatsAppChat({ variant, verificationMethod }: Props) {
         <div ref={bottomRef} />
       </div>
 
-      {/* Text input area */}
+      {/* Text input */}
       <div className="flex-shrink-0 px-3 py-2 bg-[#F0F0F0] border-t border-[#E5E5E5]">
         {showInput ? (
           <div className="flex items-center gap-2">

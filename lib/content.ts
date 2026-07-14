@@ -111,11 +111,11 @@ export const WELCOME_MESSAGES: Record<UserProfile, string> = {
 
 export const WELCOME_CTAS: Record<UserProfile, { label: string; url: string }[]> = {
   propietario: [
-    { label: "Publicar mi espacio", url: "https://spot2.mx/publicar" }, // era 25 chars
-    { label: "Ver el dashboard", url: "https://spot2.mx/dashboard" },
+    { label: "Publicar mi espacio", url: "action:publish_space" }, // dispara flujo in-chat
+    { label: "Ver el dashboard",    url: "https://spot2.mx/dashboard" },
   ],
   broker: [
-    { label: "Ver mis espacios", url: "https://spot2.mx/espacios" }, // era 22 chars
-    { label: "Ver el dashboard", url: "https://spot2.mx/dashboard" },
+    { label: "Publicar un espacio", url: "action:publish_space" }, // brokers también publican
+    { label: "Ver el dashboard",    url: "https://spot2.mx/dashboard" },
   ],
 };
