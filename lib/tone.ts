@@ -491,6 +491,12 @@ export const TONED_COPY: Record<string, Record<Tone, CopyValue>> = {
 
   // ─── Explorar sin cuenta ─────────────────────────────────────────────────────
 
+  publish_address_places_q: {
+    calido:  "¿Dónde está ubicado el espacio? Buscá la dirección exacta 📍",
+    neutro:  "¿Cuál es la dirección del espacio? Busca por calle o colonia.",
+    directo: "¿Dirección del espacio?",
+  },
+
   browse_intro: {
     calido:  "¡Perfecto! Puedo mostrarte espacios disponibles sin necesidad de crear una cuenta 🏢",
     neutro:  "Sin problema. Puedo mostrarte espacios disponibles sin registro.",

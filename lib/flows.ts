@@ -19,7 +19,8 @@ export type StepType =
   | "platformRedirect"
   | "success"
   | "list"
-  | "photoUpload";
+  | "photoUpload"
+  | "placesSearch";
 
 export type Actor = "bot" | "user";
 
@@ -83,6 +84,7 @@ export interface ConversationContext {
   spaceZip?: string;
   browseType?: string;
   browseZone?: string;
+  spaceAddress?: string;
 }
 
 // ─── Pasos compartidos de apertura ───────────────────────────────────────────
@@ -575,7 +577,7 @@ const PUBLISH_CONFIRM_STEP: Step = {
   actor: "bot",
   type: "quickReply",
   content: (ctx) =>
-    `Perfecto, acá el resumen:\n\n• Tipo: ${ctx.spaceType ?? "—"}\n• Tamaño: ${ctx.spaceSize ?? "—"} m²\n• Precio: $${ctx.spacePrice ?? "—"}/mes\n• Dirección: ${ctx.spaceStreet ?? "—"} ${ctx.spaceNumber ?? ""}, CP ${ctx.spaceZip ?? "—"}\n• Fotos: ✓\n\n¿Lo publicamos?`,
+    `Perfecto, acá el resumen:\n\n• Tipo: ${ctx.spaceType ?? "—"}\n• Tamaño: ${ctx.spaceSize ?? "—"} m²\n• Precio: $${ctx.spacePrice ?? "—"}/mes\n• Dirección: ${ctx.spaceAddress ?? (ctx.spaceStreet ? `${ctx.spaceStreet} ${ctx.spaceNumber ?? ""}, CP ${ctx.spaceZip ?? "—"}` : "—")}\n• Fotos: ✓\n\n¿Lo publicamos?`,
   contentKey: "publish_confirm_summary",
   delay: 900,
   options: [
@@ -649,15 +651,10 @@ export const PUBLISH_VARIANT_A_STEPS: Step[] = [
   {
     id: "publish_address",
     actor: "bot",
-    type: "form",
-    content: "¿Dónde está ubicado el espacio?",
-    contentKey: "publish_address_q",
+    type: "placesSearch",
+    content: "¿Dónde está ubicado el espacio? Busca la dirección exacta.",
+    contentKey: "publish_address_places_q",
     delay: 700,
-    fields: [
-      { id: "calle",  label: "Calle",           type: "text", placeholder: "Ej. Insurgentes Sur" },
-      { id: "numero", label: "Número exterior", type: "text", placeholder: "Ej. 1234" },
-      { id: "cp",     label: "Código postal",   type: "text", placeholder: "Ej. 03810" },
-    ],
     requiresInput: true,
   },
   {

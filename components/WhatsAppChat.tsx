@@ -49,6 +49,7 @@ import WhatsAppForm from "./WhatsAppForm";
 import PlatformRedirectCard from "./PlatformRedirectCard";
 import ListMessage from "./ListMessage";
 import PhotoUploadStep from "./PhotoUploadStep";
+import PlacesSearch from "./PlacesSearch";
 
 export type StartMode = "onboarding" | "publish_space" | "browse";
 
@@ -563,6 +564,20 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     });
   }
 
+  // ─── Places address handler ───────────────────────────────────────────────────
+  function handlePlacesSelect(msgId: string, address: string) {
+    if (answeredMessages.current.has(msgId)) return;
+    answeredMessages.current.add(msgId);
+    emitUserMessage(address);
+    const newCtx = { ...state.context, spaceAddress: address };
+    dispatch({ type: "SET_CONTEXT", context: { spaceAddress: address } });
+    const photosStep = PUBLISH_VARIANT_A_STEPS.find((s) => s.id === "publish_photos")!;
+    const photosIdx  = PUBLISH_VARIANT_A_STEPS.findIndex((s) => s.id === "publish_photos");
+    emitBotMessage(photosStep, newCtx);
+    dispatch({ type: "SET_PHASE", phase: "publish_photos" });
+    dispatch({ type: "SET_STEP_INDEX", index: photosIdx });
+  }
+
   // ─── Photos complete handler ──────────────────────────────────────────────────
   function handlePhotosComplete(msgId: string) {
     photosCompletedMessages.current.add(msgId);
@@ -883,22 +898,6 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
       return;
     }
 
-    // Publish address form — variante A (tiene campo "calle" pero no "espacio_tipo")
-    if (values.calle !== undefined) {
-      const street = values.calle.trim();
-      const number = (values.numero ?? "").trim();
-      const zip    = (values.cp ?? "").trim();
-      emitUserMessage(`${street} ${number}, CP ${zip}`);
-      const newCtx = { ...state.context, spaceStreet: street, spaceNumber: number, spaceZip: zip };
-      dispatch({ type: "SET_CONTEXT", context: { spaceStreet: street, spaceNumber: number, spaceZip: zip } });
-      const photosStep = PUBLISH_VARIANT_A_STEPS.find((s) => s.id === "publish_photos")!;
-      const photosIdx  = PUBLISH_VARIANT_A_STEPS.findIndex((s) => s.id === "publish_photos");
-      emitBotMessage(photosStep, newCtx);
-      dispatch({ type: "SET_PHASE", phase: "publish_photos" });
-      dispatch({ type: "SET_STEP_INDEX", index: photosIdx });
-      return;
-    }
-
     // Variante B — crear cuenta
     const name = values["name"] ?? "";
     const email = values["email"] ?? "";
@@ -1000,7 +999,7 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     : state.currentInputTarget === "password" ? "password"
     : "text";
 
-  const isPublishFormPhase = state.phase === "publish_address" || state.phase === "publish_form_b";
+  const isPublishFormPhase = state.phase === "publish_form_b";
 
   // ─── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -1042,8 +1041,7 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
           }
 
           if (msg.type === "form" && msg.fields) {
-            const isAddressForm   = msg.fields.some((f) => f.id === "calle") && !msg.fields.some((f) => f.id === "espacio_tipo");
-            const isPublishBForm  = msg.fields.some((f) => f.id === "espacio_tipo");
+            const isPublishBForm = msg.fields.some((f) => f.id === "espacio_tipo");
             return (
               <div key={msg.id}>
                 <MessageBubble message={msg} showAvatar={showAvatar} />
@@ -1051,8 +1049,8 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
                   fields={msg.fields}
                   onSubmit={handleFormSubmit}
                   disabled={!(state.phase === "flow" || isPublishFormPhase) || state.isTyping}
-                  title={isPublishBForm ? "Datos del espacio" : isAddressForm ? "Ubicación del espacio" : undefined}
-                  submitLabel={isPublishBForm ? "Guardar datos" : isAddressForm ? "Guardar dirección" : undefined}
+                  title={isPublishBForm ? "Datos del espacio" : undefined}
+                  submitLabel={isPublishBForm ? "Guardar datos" : undefined}
                 />
               </div>
             );
@@ -1068,6 +1066,21 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
                     items={msg.listItems}
                     buttonLabel={msg.listButtonLabel ?? "Ver opciones"}
                     onSelect={(id, title) => handleListSelect(msg.id, id, title)}
+                    disabled={state.isTyping}
+                  />
+                )}
+              </div>
+            );
+          }
+
+          if (msg.type === "placesSearch") {
+            const isAnswered = answeredMessages.current.has(msg.id);
+            return (
+              <div key={msg.id}>
+                <MessageBubble message={msg} showAvatar={showAvatar} />
+                {!isAnswered && (
+                  <PlacesSearch
+                    onSelect={(address) => handlePlacesSelect(msg.id, address)}
                     disabled={state.isTyping}
                   />
                 )}

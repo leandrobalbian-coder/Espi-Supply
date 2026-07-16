@@ -8,7 +8,7 @@ import type { Variant, UserProfile, Step } from "./flows";
 export interface ChatMessage {
   id: string;
   actor: "bot" | "user";
-  type: "text" | "quickReply" | "userInput" | "form" | "typing" | "cta" | "welcome" | "platformRedirect" | "success" | "list" | "photoUpload";
+  type: "text" | "quickReply" | "userInput" | "form" | "typing" | "cta" | "welcome" | "platformRedirect" | "success" | "list" | "photoUpload" | "placesSearch";
   content: string;
   options?: { id: string; label: string }[];
   fields?: { id: string; label: string; type: string; placeholder: string; options?: string[] }[];
@@ -59,6 +59,7 @@ export interface ChatState {
     spaceZip?: string;
     browseType?: string;
     browseZone?: string;
+    spaceAddress?: string;
   };
   isTyping: boolean;
   awaitingInput: boolean;
