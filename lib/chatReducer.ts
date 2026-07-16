@@ -40,7 +40,10 @@ export interface ChatState {
     | "publish_done"
     | "existing_user"
     | "ask_password"
-    | "password_input";
+    | "password_input"
+    | "browse"
+    | "browse_zone"
+    | "browse_results";
   stepIndex: number;
   context: {
     name: string;
@@ -54,6 +57,8 @@ export interface ChatState {
     spaceStreet?: string;
     spaceNumber?: string;
     spaceZip?: string;
+    browseType?: string;
+    browseZone?: string;
   };
   isTyping: boolean;
   awaitingInput: boolean;

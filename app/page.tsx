@@ -28,8 +28,9 @@ const TONES: { id: Tone; label: string; tagline: string }[] = [
 ];
 
 const DEMO_MODES: { id: StartMode; label: string; tagline: string }[] = [
-  { id: "onboarding",    label: "Crear cuenta",      tagline: "Onboarding completo" },
-  { id: "publish_space", label: "Publicar espacio",   tagline: "Flujo de publicación" },
+  { id: "onboarding",    label: "Crear cuenta",        tagline: "Onboarding completo" },
+  { id: "publish_space", label: "Publicar espacio",    tagline: "Flujo de publicación" },
+  { id: "browse",        label: "Explorar sin cuenta", tagline: "Búsqueda sin registro" },
 ];
 
 export default function Home() {
@@ -51,7 +52,7 @@ export default function Home() {
           <span className="text-[#FFAA00] font-bold text-[20px] tracking-tight">Spot2</span>
           <div className="w-px h-5 bg-white/20" />
           <span className="text-white/80 text-[13px] font-medium">
-            {AGENT_NAME} — Supply Agent · {startMode === "publish_space" ? "Flujo de publicación" : "Demo de creación de cuenta"}
+            {AGENT_NAME} — Supply Agent · {startMode === "publish_space" ? "Flujo de publicación" : startMode === "browse" ? "Explorar sin cuenta" : "Demo de creación de cuenta"}
           </span>
         </div>
         <span className="text-[11px] text-white/40 font-medium hidden md:block">

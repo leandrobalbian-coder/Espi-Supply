@@ -488,6 +488,44 @@ export const TONED_COPY: Record<string, Record<Tone, CopyValue>> = {
     neutro:  "De acuerdo. ¿Cuál es el correo que deseas usar?",
     directo: "¿Cuál es el otro correo?",
   },
+
+  // ─── Explorar sin cuenta ─────────────────────────────────────────────────────
+
+  browse_intro: {
+    calido:  "¡Perfecto! Puedo mostrarte espacios disponibles sin necesidad de crear una cuenta 🏢",
+    neutro:  "Sin problema. Puedo mostrarte espacios disponibles sin registro.",
+    directo: "Te muestro espacios disponibles ahora.",
+  },
+
+  browse_type_q: {
+    calido:  "¿Qué tipo de espacio estás buscando?",
+    neutro:  "¿Qué tipo de espacio necesitas?",
+    directo: "¿Tipo de espacio?",
+  },
+
+  browse_zone_q: {
+    calido:  "¿En qué ciudad o colonia buscas?",
+    neutro:  "¿En qué zona o ciudad deseas buscar?",
+    directo: "¿Zona o ciudad?",
+  },
+
+  browse_searching: {
+    calido:  "Buscando espacios… 🔍",
+    neutro:  "Buscando espacios disponibles…",
+    directo: "Buscando…",
+  },
+
+  browse_results_intro: {
+    calido:  (ctx) => `Encontré estas opciones cerca de ${ctx.browseZone ?? "tu zona"} 👇`,
+    neutro:  (ctx) => `Espacios disponibles en ${ctx.browseZone ?? "tu zona"}:`,
+    directo: (ctx) => `Resultados en ${ctx.browseZone ?? "tu zona"}:`,
+  },
+
+  browse_cta: {
+    calido:  "Para ver detalles completos y contactar a los propietarios, crea tu cuenta gratis — solo toma 2 minutos 🚀",
+    neutro:  "Para ver detalles y contactar propietarios, crea tu cuenta gratuita en Spot2.",
+    directo: "Crea tu cuenta para ver detalles y contactar.",
+  },
 };
 
 export function getCopy(key: string, tone: Tone, ctx: ConversationContext): string {

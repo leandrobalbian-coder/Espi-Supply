@@ -81,6 +81,8 @@ export interface ConversationContext {
   spaceStreet?: string;
   spaceNumber?: string;
   spaceZip?: string;
+  browseType?: string;
+  browseZone?: string;
 }
 
 // ─── Pasos compartidos de apertura ───────────────────────────────────────────
@@ -103,8 +105,9 @@ export const OPENING_STEPS: Step[] = [
     contentKey: "intro_opening",
     delay: 1200,
     options: [
-      { id: "start", label: "Sí, ayúdame" },
-      { id: "whatis", label: "¿Qué es Spot2?" },
+      { id: "start",   label: "Sí, ayúdame" },
+      { id: "whatis",  label: "¿Qué es Spot2?" },
+      { id: "explore", label: "Solo explorar" },
     ],
     requiresInput: true,
   },
@@ -492,6 +495,79 @@ export const SPACE_TYPES: ListItem[] = [
   { id: "parque",      title: "Parque Industrial",  description: "Dentro de parque industrial" },
   { id: "flex",        title: "Flex / Coworking",  description: "Espacio compartido o flexible" },
 ];
+
+// ─── Explorar sin cuenta ─────────────────────────────────────────────────────
+
+export const BROWSE_INTRO_STEP: Step = {
+  id: "browse_intro",
+  actor: "bot",
+  type: "text",
+  content: "¡Perfecto! Puedo mostrarte espacios disponibles sin necesidad de crear una cuenta.",
+  contentKey: "browse_intro",
+  delay: 700,
+};
+
+export const BROWSE_TYPE_STEP: Step = {
+  id: "browse_type",
+  actor: "bot",
+  type: "list",
+  content: "¿Qué tipo de espacio estás buscando?",
+  contentKey: "browse_type_q",
+  delay: 900,
+  listItems: SPACE_TYPES,
+  listButtonLabel: "Ver tipos",
+  requiresInput: true,
+};
+
+export const BROWSE_ZONE_STEP: Step = {
+  id: "browse_zone",
+  actor: "bot",
+  type: "userInput",
+  content: "¿En qué ciudad o colonia buscas?",
+  contentKey: "browse_zone_q",
+  delay: 800,
+  requiresInput: true,
+};
+
+export const BROWSE_SEARCHING_STEP: Step = {
+  id: "browse_searching",
+  actor: "bot",
+  type: "typing",
+  content: "Buscando espacios…",
+  contentKey: "browse_searching",
+  delay: 400,
+  auto: true,
+};
+
+export const BROWSE_RESULTS_STEP = (spaceType: string, zone: string): Step => ({
+  id: "browse_results",
+  actor: "bot",
+  type: "list",
+  content: `Encontré opciones de ${spaceType} cerca de ${zone}:`,
+  contentKey: "browse_results_intro",
+  delay: 1000,
+  listItems: [
+    { id: "r1", title: `${spaceType} · ${zone}`,     description: "850 m² · $45,000/mes" },
+    { id: "r2", title: `${spaceType} · Centro`,       description: "320 m² · $18,500/mes" },
+    { id: "r3", title: `${spaceType} · Corporativo`,  description: "1,200 m² · $95,000/mes" },
+  ],
+  listButtonLabel: "Ver espacios",
+  requiresInput: true,
+});
+
+export const BROWSE_CTA_STEP: Step = {
+  id: "browse_cta",
+  actor: "bot",
+  type: "quickReply",
+  content: "Para ver detalles completos y contactar a los propietarios, crea tu cuenta gratis. Solo toma 2 minutos.",
+  contentKey: "browse_cta",
+  delay: 900,
+  options: [
+    { id: "start",   label: "Crear mi cuenta" },
+    { id: "later",   label: "Quizás después" },
+  ],
+  requiresInput: true,
+};
 
 // Pasos de éxito compartidos entre variantes A y B
 const PUBLISH_CONFIRM_STEP: Step = {

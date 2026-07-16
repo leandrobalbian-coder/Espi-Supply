@@ -30,6 +30,12 @@ import {
   EXISTING_USER_STEPS,
   REGISTERED_EMAILS,
   HUMAN_HANDOFF_STEP,
+  BROWSE_INTRO_STEP,
+  BROWSE_TYPE_STEP,
+  BROWSE_ZONE_STEP,
+  BROWSE_SEARCHING_STEP,
+  BROWSE_RESULTS_STEP,
+  BROWSE_CTA_STEP,
   type Variant,
   type VerificationMethod,
   type Step,
@@ -44,7 +50,7 @@ import PlatformRedirectCard from "./PlatformRedirectCard";
 import ListMessage from "./ListMessage";
 import PhotoUploadStep from "./PhotoUploadStep";
 
-export type StartMode = "onboarding" | "publish_space";
+export type StartMode = "onboarding" | "publish_space" | "browse";
 
 interface Props {
   variant: Variant;
@@ -242,6 +248,17 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     [variant, emitBotMessage]
   );
 
+  // ─── Browse flow orchestrator ────────────────────────────────────────────────
+  const runBrowseFlow = useCallback(
+    (ctx: ConversationContext) => {
+      emitBotMessage(BROWSE_INTRO_STEP, ctx, () => {
+        emitBotMessage(BROWSE_TYPE_STEP, ctx);
+        dispatch({ type: "SET_PHASE", phase: "browse" });
+      });
+    },
+    [emitBotMessage]
+  );
+
   // ─── Variant flow orchestrator ───────────────────────────────────────────────
   const runVariantFlow = useCallback(
     (ctx: ConversationContext) => {
@@ -324,6 +341,14 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
         runPublishSpaceFlow(ctx);
       }, 400);
       timers.push(t);
+    } else if (startMode === "browse") {
+      dispatch({ type: "SET_TYPING", value: true });
+      const t = setTimeout(() => {
+        if (cancelled) return;
+        dispatch({ type: "SET_TYPING", value: false });
+        runBrowseFlow(ctx);
+      }, 400);
+      timers.push(t);
     } else {
       let i = 0;
       function runOpening() {
@@ -367,6 +392,7 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     if (state.phase === "opening") {
       if (optId === "start") { runVariantFlow(ctx); }
       else if (optId === "whatis") { dispatch({ type: "SET_PHASE", phase: "whatis" }); emitBotMessage(WHATIS_BRANCH_STEPS[0], ctx); }
+      else if (optId === "explore") { runBrowseFlow(ctx); }
       else if (optId === "later") { emitBotMessage(LATER_STEP, ctx); dispatch({ type: "SET_PHASE", phase: "bye" }); }
       return;
     }
@@ -436,6 +462,12 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
       return;
     }
 
+    if (state.phase === "browse_results") {
+      if (optId === "start") { runVariantFlow(ctx); }
+      else { emitBotMessage(LATER_STEP, ctx); dispatch({ type: "SET_PHASE", phase: "bye" }); }
+      return;
+    }
+
     if (state.phase === "publish_confirm") {
       if (optId === "space_publish") {
         const stepsRef = variant === "B" ? PUBLISH_VARIANT_B_STEPS : PUBLISH_VARIANT_A_STEPS;
@@ -497,6 +529,25 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     if (answeredMessages.current.has(msgId)) return;
     answeredMessages.current.add(msgId);
     emitUserMessage(itemTitle);
+
+    // Browse flow: type selection
+    if (state.phase === "browse") {
+      const newCtx = { ...state.context, browseType: itemTitle };
+      dispatch({ type: "SET_CONTEXT", context: { browseType: itemTitle } });
+      emitBotMessage(BROWSE_ZONE_STEP, newCtx, () => {
+        dispatch({ type: "SET_AWAITING_INPUT", target: "name" }); // reuse "name" target for zone text
+        dispatch({ type: "SET_PHASE", phase: "browse_zone" });
+      });
+      return;
+    }
+
+    // Browse results: user tapped a result card → show CTA
+    if (state.phase === "browse_results") {
+      const ctx = state.context;
+      emitBotMessage(BROWSE_CTA_STEP, ctx);
+      dispatch({ type: "SET_PHASE", phase: "browse_results" });
+      return;
+    }
 
     const newCtx = { ...state.context, spaceType: itemTitle };
     dispatch({ type: "SET_CONTEXT", context: { spaceType: itemTitle } });
@@ -582,6 +633,24 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
       } else {
         emitBotMessage(OTP_CODE_WRONG_STEP, state.context);
       }
+      return;
+    }
+
+    // Browse flow — zone input
+    if (state.phase === "browse_zone") {
+      emitUserMessage(val);
+      dispatch({ type: "SET_INPUT_VALUE", value: "" });
+      dispatch({ type: "SET_AWAITING_INPUT", target: null });
+      const browseType = state.context.browseType ?? "Espacio";
+      const newCtx = { ...state.context, browseZone: val };
+      dispatch({ type: "SET_CONTEXT", context: { browseZone: val } });
+      emitBotMessage(BROWSE_SEARCHING_STEP, newCtx, () => {
+        const resultsStep = BROWSE_RESULTS_STEP(browseType, val);
+        emitBotMessage(resultsStep, newCtx, () => {
+          emitBotMessage(BROWSE_CTA_STEP, newCtx);
+          dispatch({ type: "SET_PHASE", phase: "browse_results" });
+        });
+      });
       return;
     }
 
@@ -919,6 +988,7 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
 
   const inputPlaceholder =
     state.currentInputTarget === "verif_code" ? "Escribe el código de 6 dígitos…"
+    : state.phase === "browse_zone"            ? "Ej. Santa Fe, Polanco, Monterrey…"
     : state.currentInputTarget === "name"      ? "Escribe tu nombre…"
     : state.currentInputTarget === "size"      ? "Ej. 250"
     : state.currentInputTarget === "price"     ? "Ej. 25000"
