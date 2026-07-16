@@ -20,7 +20,8 @@ export type StepType =
   | "success"
   | "list"
   | "photoUpload"
-  | "placesSearch";
+  | "placesSearch"
+  | "docUpload";
 
 export type Actor = "bot" | "user";
 
@@ -777,3 +778,51 @@ export const PUBLISH_VARIANT_C_STEPS: Step[] = [
     delay: 1000,
   },
 ];
+
+// ─── Block 6: KYC Broker ─────────────────────────────────────────────────────
+
+export const KYC_INTRO_STEP: Step = {
+  id: "kyc_intro",
+  actor: "bot",
+  type: "text",
+  content: "Para activar tu perfil de broker necesito verificar tu identidad. Es un proceso rápido — solo 2 documentos.",
+  contentKey: "kyc_intro",
+  delay: 600,
+};
+
+export const KYC_ID_STEP: Step = {
+  id: "kyc_id",
+  actor: "bot",
+  type: "docUpload",
+  content: "Primero, adjunta una foto de tu INE o pasaporte vigente.",
+  contentKey: "kyc_id_q",
+  delay: 800,
+  requiresInput: true,
+};
+
+export const KYC_LICENSE_STEP: Step = {
+  id: "kyc_license",
+  actor: "bot",
+  type: "docUpload",
+  content: "Ahora adjunta tu cédula de corredor inmobiliario o constancia de AMPI.",
+  contentKey: "kyc_license_q",
+  delay: 700,
+  requiresInput: true,
+};
+
+export const KYC_PROCESSING_STEP: Step = {
+  id: "kyc_processing",
+  actor: "bot",
+  type: "typing",
+  content: "",
+  delay: 2200,
+};
+
+export const KYC_VERIFIED_STEP: Step = {
+  id: "kyc_verified",
+  actor: "bot",
+  type: "text",
+  content: "Identidad verificada. Tu perfil de broker ya está activo en Spot2.",
+  contentKey: "kyc_verified",
+  delay: 500,
+};

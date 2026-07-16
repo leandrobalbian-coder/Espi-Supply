@@ -36,6 +36,11 @@ import {
   BROWSE_SEARCHING_STEP,
   BROWSE_RESULTS_STEP,
   BROWSE_CTA_STEP,
+  KYC_INTRO_STEP,
+  KYC_ID_STEP,
+  KYC_LICENSE_STEP,
+  KYC_PROCESSING_STEP,
+  KYC_VERIFIED_STEP,
   type Variant,
   type VerificationMethod,
   type Step,
@@ -50,6 +55,7 @@ import PlatformRedirectCard from "./PlatformRedirectCard";
 import ListMessage from "./ListMessage";
 import PhotoUploadStep from "./PhotoUploadStep";
 import PlacesSearch from "./PlacesSearch";
+import DocUploadStep from "./DocUploadStep";
 
 export type StartMode = "onboarding" | "publish_space" | "browse";
 
@@ -219,6 +225,17 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
       dispatch({ type: "SET_PHASE", phase: "success" });
     },
     [emitBotMessage, verificationMethod]
+  );
+
+  // ─── KYC broker flow ─────────────────────────────────────────────────────────
+  const runKycFlow = useCallback(
+    (ctx: ConversationContext) => {
+      emitBotMessage(KYC_INTRO_STEP, ctx, () => {
+        emitBotMessage(KYC_ID_STEP, ctx);
+        dispatch({ type: "SET_PHASE", phase: "kyc_id" });
+      });
+    },
+    [emitBotMessage]
   );
 
   // ─── Publish space flow ───────────────────────────────────────────────────────
@@ -445,8 +462,13 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
 
     if (state.phase === "ask_profile") {
       const profile = optId as UserProfile;
+      const newCtx = { ...ctx, profile };
       dispatch({ type: "SET_CONTEXT", context: { profile } });
-      runSuccess({ ...ctx, profile });
+      if (profile === "broker") {
+        runKycFlow(newCtx);
+      } else {
+        runSuccess(newCtx);
+      }
       return;
     }
 
@@ -588,6 +610,30 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     emitBotMessage(confirmStep, ctx);
     dispatch({ type: "SET_PHASE", phase: "publish_confirm" });
     dispatch({ type: "SET_STEP_INDEX", index: confirmIdx });
+  }
+
+  // ─── KYC doc upload handler ──────────────────────────────────────────────────
+  const kycCompletedMessages = useRef<Set<string>>(new Set());
+
+  function handleDocUpload(msgId: string) {
+    if (kycCompletedMessages.current.has(msgId)) return;
+    kycCompletedMessages.current.add(msgId);
+    const ctx = state.context;
+
+    if (state.phase === "kyc_id") {
+      emitBotMessage(KYC_LICENSE_STEP, ctx);
+      dispatch({ type: "SET_PHASE", phase: "kyc_license" });
+      return;
+    }
+
+    if (state.phase === "kyc_license") {
+      dispatch({ type: "SET_PHASE", phase: "kyc_done" });
+      emitBotMessage(KYC_PROCESSING_STEP, ctx, () => {
+        emitBotMessage(KYC_VERIFIED_STEP, ctx, () => {
+          runSuccess(ctx);
+        });
+      });
+    }
   }
 
   // ─── Detección de fricción ────────────────────────────────────────────────────
@@ -1097,6 +1143,24 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
                   <PhotoUploadStep
                     onComplete={() => handlePhotosComplete(msg.id)}
                     disabled={state.phase !== "publish_photos" || state.isTyping}
+                  />
+                )}
+              </div>
+            );
+          }
+
+          if (msg.type === "docUpload") {
+            const isAnswered = kycCompletedMessages.current.has(msg.id);
+            const isIdStep = msg.id === "kyc_id" || msg.content.includes("INE");
+            return (
+              <div key={msg.id}>
+                <MessageBubble message={msg} showAvatar={showAvatar} />
+                {!isAnswered && (
+                  <DocUploadStep
+                    label={isIdStep ? "Adjuntar INE o Pasaporte" : "Adjuntar cédula / constancia"}
+                    docType={isIdStep ? "INE o Pasaporte vigente" : "Cédula de corredor / AMPI"}
+                    onComplete={() => handleDocUpload(msg.id)}
+                    disabled={!["kyc_id", "kyc_license"].includes(state.phase) || state.isTyping}
                   />
                 )}
               </div>

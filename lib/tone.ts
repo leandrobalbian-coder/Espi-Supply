@@ -532,6 +532,31 @@ export const TONED_COPY: Record<string, Record<Tone, CopyValue>> = {
     neutro:  "Para ver detalles y contactar propietarios, crea tu cuenta gratuita en Spot2.",
     directo: "Crea tu cuenta para ver detalles y contactar.",
   },
+
+  // KYC Broker
+  kyc_intro: {
+    calido:  "Para activar tu perfil de broker necesito verificar tu identidad. Es rápido — solo 2 documentos y listo.",
+    neutro:  "Para activar tu perfil de broker necesito verificar tu identidad. Solo requiero 2 documentos.",
+    directo: "Verificación de broker: necesito 2 documentos.",
+  },
+
+  kyc_id_q: {
+    calido:  "Primero, adjunta una foto clara de tu INE o pasaporte vigente.",
+    neutro:  "Adjunta tu INE o pasaporte vigente.",
+    directo: "Adjunta INE o pasaporte.",
+  },
+
+  kyc_license_q: {
+    calido:  "Casi listo. Ahora adjunta tu cédula de corredor inmobiliario o constancia de AMPI.",
+    neutro:  "Adjunta tu cédula de corredor inmobiliario o constancia de AMPI.",
+    directo: "Adjunta cédula de corredor o constancia AMPI.",
+  },
+
+  kyc_verified: {
+    calido:  (ctx) => `Identidad verificada, ${ctx.name ? ctx.name : "listo"}. Tu perfil de broker ya está activo en Spot2.`,
+    neutro:  (ctx) => `Verificación completada${ctx.name ? `, ${ctx.name}` : ""}. Tu perfil de broker está activo.`,
+    directo: "Verificado. Perfil de broker activo.",
+  },
 };
 
 export function getCopy(key: string, tone: Tone, ctx: ConversationContext): string {
