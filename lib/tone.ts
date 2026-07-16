@@ -105,9 +105,9 @@ export const TONED_COPY: Record<string, Record<Tone, CopyValue>> = {
   },
 
   c_redirect: {
-    calido:  (ctx) => `Perfecto, ${ctx.name}. Te mando a la plataforma con tus datos ya listos — solo confirma y tu cuenta queda creada al instante.`,
-    neutro:  (ctx) => `Listo, ${ctx.name}. Te redireccionamos a Spot2 con tus datos pre-cargados para completar el registro.`,
-    directo: (ctx) => `Todo listo, ${ctx.name}. Abre Spot2 para confirmar tu cuenta.`,
+    calido:  (ctx) => `Perfecto, ${ctx.name}. Te mando a la plataforma con tus datos ya listos — solo confirma, define tu contraseña y tu cuenta queda creada al instante.`,
+    neutro:  (ctx) => `Listo, ${ctx.name}. Te redireccionamos a Spot2 con tus datos pre-cargados. Allí podrás definir tu contraseña y completar el registro.`,
+    directo: (ctx) => `Todo listo, ${ctx.name}. Abre Spot2 para confirmar tu cuenta y definir tu contraseña.`,
   },
 
   // ─── Corrección granular ──────────────────────────────────────────────────────
@@ -150,28 +150,40 @@ export const TONED_COPY: Record<string, Record<Tone, CopyValue>> = {
     directo: (ctx) => `Cuenta creada. Enlace de confirmación enviado a ${ctx.email}.`,
   },
 
-  // ─── Verificación V1 ─────────────────────────────────────────────────────────
+  // ─── Verificación OTP (WA / EMAIL / SMS) ─────────────────────────────────────
 
-  v1_ask_code: {
+  otp_ask_wa: {
+    calido:  "Te acabo de mandar un código de 6 dígitos por WhatsApp a este mismo chat 🔒 ¿Me lo escribís?",
+    neutro:  "Enviamos un código de 6 dígitos a este chat de WhatsApp. Escríbelo aquí.",
+    directo: "Código de 6 dígitos enviado a este chat. ¿Cuál es?",
+  },
+
+  otp_ask_email: {
     calido:  (ctx) => `Para confirmar que es tuyo, te envié un código de 6 dígitos a ${ctx.email} 📩 ¿Me lo compartes?`,
     neutro:  (ctx) => `Para verificar tu correo, enviamos un código de 6 dígitos a ${ctx.email}. Compártelo aquí.`,
     directo: (ctx) => `Código enviado a ${ctx.email}. ¿Cuál es?`,
   },
 
-  v1_confirmed: {
-    calido:  "¡Perfecto! Correo confirmado ✓",
-    neutro:  "Correo verificado.",
+  otp_ask_sms: {
+    calido:  "Te enviamos un código de 6 dígitos por SMS al número registrado 📱 ¿Me lo compartís?",
+    neutro:  "Enviamos un código de 6 dígitos por SMS al número registrado. Escríbelo aquí.",
+    directo: "Código por SMS enviado. ¿Cuál es?",
+  },
+
+  otp_confirmed: {
+    calido:  "¡Perfecto! Verificado ✓",
+    neutro:  "Verificado correctamente.",
     directo: "Verificado.",
   },
 
-  v1_wrong: {
+  otp_wrong: {
     calido:  "Ese código no coincide. ¿Lo reintentas?",
     neutro:  "El código no es correcto. ¿Deseas reintentarlo?",
     directo: "Código incorrecto. ¿Reintento?",
   },
 
-  v1_resent: {
-    calido:  "Listo, te lo mandé de nuevo 📩 ¿Me lo compartes?",
+  otp_resent: {
+    calido:  "Listo, te lo acabo de reenviar 🔄 ¿Me lo compartís?",
     neutro:  "Código reenviado. Compártelo cuando lo tengas.",
     directo: "Reenviado. ¿Cuál es?",
   },
@@ -421,6 +433,32 @@ export const TONED_COPY: Record<string, Record<Tone, CopyValue>> = {
     calido:  (ctx) => `¡Hola de nuevo, ${ctx.name}! 👋 Ya tenía tu correo (${ctx.email}). Seguimos desde donde lo dejamos.`,
     neutro:  (ctx) => `Bienvenido de nuevo, ${ctx.name}. Continuamos — ya tenemos tu correo (${ctx.email}).`,
     directo: (ctx) => `Seguimos, ${ctx.name}. Correo ya guardado.`,
+  },
+
+  // ─── Contraseña / clave temporal ─────────────────────────────────────────────
+
+  ask_password_choice: {
+    calido:  "Ya casi 🔐 ¿Cómo querés proteger tu cuenta?",
+    neutro:  "Un paso más. ¿Cómo deseas proteger tu cuenta?",
+    directo: "¿Contraseña propia o clave temporal?",
+  },
+
+  ask_password_input: {
+    calido:  "Perfecto. Escribe tu contraseña — mínimo 8 caracteres. La guardamos de forma segura 🔒",
+    neutro:  "Ingresa tu contraseña (mínimo 8 caracteres). La almacenamos de forma segura.",
+    directo: "¿Tu contraseña? (mín. 8 caracteres)",
+  },
+
+  password_too_short: {
+    calido:  "La contraseña necesita al menos 8 caracteres para ser segura 😊 ¿Lo intentamos de nuevo?",
+    neutro:  "La contraseña debe tener al menos 8 caracteres. Por favor intenta de nuevo.",
+    directo: "Mínimo 8 caracteres. ¿De nuevo?",
+  },
+
+  temp_password_sent: {
+    calido:  (ctx) => `Listo 📩 Te enviamos una clave temporal a ${ctx.email}. La cambias al primer ingreso desde tu perfil.`,
+    neutro:  (ctx) => `Clave temporal enviada a ${ctx.email}. Podrás cambiarla al ingresar por primera vez.`,
+    directo: (ctx) => `Clave temporal enviada a ${ctx.email}. Cámbiala al entrar.`,
   },
 
   // ─── Fallback a humano ───────────────────────────────────────────────────────

@@ -13,9 +13,10 @@ const VARIANTS: { id: Variant; label: string; tagline: string }[] = [
 ];
 
 const VERIFICATION_METHODS: { id: VerificationMethod; label: string; tagline: string }[] = [
-  { id: "V0", label: "V0 — Sin verificación", tagline: "Directo al onboarding" },
-  { id: "V1", label: "V1 — Código OTP", tagline: "6 dígitos en el chat" },
-  { id: "V2", label: "V2 — Magic link", tagline: "Enlace diferido por correo" },
+  { id: "V0",    label: "V0 — Sin verificación", tagline: "Directo al onboarding" },
+  { id: "WA",    label: "OTP WhatsApp",           tagline: "Código en este mismo chat" },
+  { id: "EMAIL", label: "OTP Correo",             tagline: "6 dígitos al email" },
+  { id: "SMS",   label: "OTP SMS",                tagline: "6 dígitos al número" },
 ];
 
 const DEMO_CODE = "123456";
@@ -216,15 +217,12 @@ export default function Home() {
               </div>
             </section>
 
-            {/* V1 OTP hint card */}
-            {verificationMethod === "V1" && (
+            {/* OTP hint card — visible para WA / EMAIL / SMS */}
+            {(verificationMethod === "WA" || verificationMethod === "EMAIL" || verificationMethod === "SMS") && (
               <section>
                 <div
                   className="rounded-xl p-3 flex flex-col gap-1.5"
-                  style={{
-                    border: "1.5px dashed #FFAA00",
-                    background: "#FFFBF0",
-                  }}
+                  style={{ border: "1.5px dashed #FFAA00", background: "#FFFBF0" }}
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-[16px]">💡</span>
@@ -233,13 +231,17 @@ export default function Home() {
                     </span>
                   </div>
                   <p className="text-[12px] text-[#424552] leading-relaxed">
-                    Código OTP fijo para esta demo:
+                    {verificationMethod === "WA"    && "Código OTP fijo — simula envío por WhatsApp:"}
+                    {verificationMethod === "EMAIL" && "Código OTP fijo — simula envío por correo:"}
+                    {verificationMethod === "SMS"   && "Código OTP fijo — simula envío por SMS:"}
                   </p>
                   <p className="text-[22px] font-bold text-[#1C1F2A] tracking-[0.3em] text-center py-1">
                     {DEMO_CODE}
                   </p>
                   <p className="text-[11px] text-[#9898A2] leading-relaxed">
-                    En producción se enviaría un código real al correo del usuario.
+                    {verificationMethod === "WA"    && "En producción llegaría como mensaje de WhatsApp Business."}
+                    {verificationMethod === "EMAIL" && "En producción se enviaría al correo registrado."}
+                    {verificationMethod === "SMS"   && "En producción se enviaría al número de WhatsApp del usuario."}
                   </p>
                 </div>
               </section>
@@ -358,17 +360,22 @@ const VERIFICATION_METRICS: Record<
   V0: {
     friction: "Baja",
     pros: ["Cero fricción extra", "Onboarding más rápido"],
-    cons: ["Sin validación de correo", "Mayor riesgo de datos incorrectos"],
+    cons: ["Sin validación de identidad", "Mayor riesgo de datos incorrectos"],
   },
-  V1: {
-    friction: "Media",
-    pros: ["Correo verificado al instante", "Reduce bounces"],
-    cons: ["Un paso extra en el chat", "Requiere acceso al correo en ese momento"],
-  },
-  V2: {
+  WA: {
     friction: "Baja",
-    pros: ["No interrumpe el flujo", "Verificación cuando el usuario quiera"],
-    cons: ["Correo puede quedar sin verificar", "Envío de emails como deuda técnica"],
+    pros: ["El código llega al mismo chat", "Sin cambio de contexto", "Alta tasa de entrega"],
+    cons: ["Requiere número con WhatsApp Business API", "Costo por mensaje"],
+  },
+  EMAIL: {
+    friction: "Media",
+    pros: ["Correo verificado al instante", "Reduce bounces en CRM"],
+    cons: ["Requiere acceso al correo en ese momento", "Puede caer en spam"],
+  },
+  SMS: {
+    friction: "Media",
+    pros: ["Amplia cobertura (no depende de WhatsApp)", "Familiar para cualquier usuario"],
+    cons: ["Costo por SMS", "Demora posible en operadoras saturadas"],
   },
 };
 

@@ -5,7 +5,7 @@
  */
 
 export type Variant = "A" | "B" | "C";
-export type VerificationMethod = "V0" | "V1" | "V2";
+export type VerificationMethod = "V0" | "WA" | "EMAIL" | "SMS";
 export type UserProfile = "propietario" | "broker" | "desarrollador";
 
 export type StepType =
@@ -39,9 +39,12 @@ export interface FormField {
   label: string;
   // Meta WhatsApp Flows soporta: text, email, phone, number, date, y single-select (dropdown).
   // "select" aquí simula el single-select nativo de Flows. En producción requiere JSON schema registrado en Meta Business.
-  type: "text" | "email" | "select";
+  // "password" → TextInput con type=password (enmascarado). "checkbox" → OptIn nativo de Flows.
+  type: "text" | "email" | "select" | "password" | "checkbox";
   placeholder: string;
-  options?: string[]; // solo para type: "select"
+  options?: string[];    // solo para type: "select"
+  optional?: boolean;    // campo no requerido en validación
+  disables?: string;     // id del campo que deshabilita cuando está marcado (solo para checkbox)
 }
 
 export interface Step {
@@ -69,6 +72,8 @@ export interface ConversationContext {
   name: string;
   email: string;
   profile: UserProfile | null;
+  password?: string;
+  usesTempPassword?: boolean;
   variantAnswered?: boolean;
   spaceType?: string;
   spaceSize?: string;
@@ -196,57 +201,55 @@ export const SUCCESS_STEP: Step = {
   delay: 1000,
 };
 
-// V2 — el magic link se menciona en el mensaje de éxito (verificación diferida)
-export const SUCCESS_STEP_V2: Step = {
-  id: "success_v2",
-  actor: "bot",
-  type: "success",
-  content: (ctx) =>
-    `¡Listo, ${ctx.name}! Tu cuenta ya está creada 🎉 Te envié un enlace a ${ctx.email} para confirmar tu cuenta cuando entres 🔗 Mientras tanto, ya puedes empezar.`,
-  contentKey: "success_v2",
-  delay: 1000,
-};
+// OTP — pasos compartidos por los 3 canales de verificación
 
-// V1 — pasos de verificación por código OTP (simulado)
-export const V1_ASK_CODE_STEP = (email: string): Step => ({
-  id: "v1_ask_code",
+export const OTP_ASK_CODE_STEP = (channel: "WA" | "EMAIL" | "SMS", ctx: { email: string }): Step => ({
+  id: "otp_ask_code",
   actor: "bot",
   type: "userInput",
-  content: `Para confirmar que es tuyo, te envié un código de 6 dígitos a ${email} 📩 ¿Me lo compartes?`,
-  contentKey: "v1_ask_code",
+  content: channel === "WA"
+    ? "Te acabo de mandar un código de 6 dígitos por WhatsApp a este mismo chat 🔒 ¿Me lo escribís?"
+    : channel === "EMAIL"
+    ? `Para confirmar que es tuyo, te envié un código de 6 dígitos a ${ctx.email} 📩 ¿Me lo compartes?`
+    : "Te enviamos un código de 6 dígitos por SMS al número registrado 📱 ¿Me lo compartís?",
+  contentKey: channel === "WA" ? "otp_ask_wa" : channel === "EMAIL" ? "otp_ask_email" : "otp_ask_sms",
   delay: 900,
   requiresInput: true,
 });
 
-export const V1_CODE_SUCCESS_STEP: Step = {
-  id: "v1_confirmed",
+export const OTP_CODE_SUCCESS_STEP: Step = {
+  id: "otp_confirmed",
   actor: "bot",
   type: "text",
-  content: "¡Perfecto! Correo confirmado ✓",
-  contentKey: "v1_confirmed",
+  content: "¡Perfecto! Verificado ✓",
+  contentKey: "otp_confirmed",
   delay: 600,
 };
 
-export const V1_CODE_WRONG_STEP: Step = {
-  id: "v1_wrong",
+export const OTP_CODE_WRONG_STEP: Step = {
+  id: "otp_wrong",
   actor: "bot",
   type: "quickReply",
   content: "Ese código no coincide. ¿Lo reintentas?",
-  contentKey: "v1_wrong",
+  contentKey: "otp_wrong",
   delay: 600,
   options: [{ id: "resend_code", label: "Reenviar código" }],
   requiresInput: true,
 };
 
-export const V1_RESENT_STEP: Step = {
-  id: "v1_resent",
+export const OTP_RESENT_STEP = (channel: "WA" | "EMAIL" | "SMS"): Step => ({
+  id: "otp_resent",
   actor: "bot",
   type: "userInput",
-  content: "Listo, te lo mandé de nuevo 📩 ¿Me lo compartes?",
-  contentKey: "v1_resent",
+  content: channel === "WA"
+    ? "Listo, te lo acabo de reenviar por WhatsApp 🔄 ¿Me lo compartes?"
+    : channel === "EMAIL"
+    ? "Listo, te lo mandé de nuevo al correo 📩 ¿Me lo compartes?"
+    : "Listo, te lo mandé de nuevo por SMS 📱 ¿Me lo compartes?",
+  contentKey: "otp_resent",
   delay: 600,
   requiresInput: true,
-};
+});
 
 // ─── Variante A — Solo botón de confirmación ─────────────────────────────────
 
@@ -327,7 +330,7 @@ export const VARIANT_B_STEPS: Step[] = [
     contentKey: "b_form_label",
     delay: 600,
     fields: [
-      { id: "name", label: "Nombre completo", type: "text", placeholder: "Ej. María García" },
+      { id: "name",  label: "Nombre completo",    type: "text",  placeholder: "Ej. María García" },
       { id: "email", label: "Correo electrónico", type: "email", placeholder: "Ej. maria@empresa.com" },
       // single-select: simula WhatsApp Flows SingleChoiceItem. Máx ~24 chars por opción en Flows real.
       {
@@ -337,6 +340,11 @@ export const VARIANT_B_STEPS: Step[] = [
         placeholder: "Selecciona tu perfil",
         options: ["Soy propietario", "Soy broker", "Soy desarrollador"],
       },
+      // Contraseña: TextInput enmascarado. En Flows real: type="password".
+      // El OptIn "Prefiero clave temporal" deshabilita este campo cuando está marcado.
+      { id: "password", label: "Contraseña (mín. 8 caracteres)", type: "password", placeholder: "••••••••", disables: undefined },
+      // OptIn nativo de WhatsApp Flows — deshabilita el campo password cuando está marcado.
+      { id: "prefer_temp_password", label: "Prefiero recibir una clave temporal por correo", type: "checkbox", placeholder: "", optional: true, disables: "password" },
     ],
     requiresInput: true,
   },
@@ -383,6 +391,41 @@ export const VARIANT_C_STEPS: Step[] = [
     requiresInput: true,
   },
 ];
+
+// ─── Contraseña / clave temporal ─────────────────────────────────────────────
+
+export const ASK_PASSWORD_CHOICE_STEP: Step = {
+  id: "ask_password_choice",
+  actor: "bot",
+  type: "quickReply",
+  content: "Casi listo. ¿Cómo querés proteger tu cuenta?",
+  contentKey: "ask_password_choice",
+  delay: 800,
+  options: [
+    { id: "create_password", label: "Crear contraseña" },   // 16 chars ✓
+    { id: "temp_password",   label: "Enviarme clave temp" }, // 18 chars ✓
+  ],
+  requiresInput: true,
+};
+
+export const ASK_PASSWORD_INPUT_STEP: Step = {
+  id: "ask_password_input",
+  actor: "bot",
+  type: "userInput",
+  content: "Escribe tu contraseña (mínimo 8 caracteres). La guardamos de forma segura.",
+  contentKey: "ask_password_input",
+  delay: 700,
+  requiresInput: true,
+};
+
+export const TEMP_PASSWORD_SENT_STEP: Step = {
+  id: "temp_password_sent",
+  actor: "bot",
+  type: "text",
+  content: "Listo. Te enviamos una clave temporal a tu correo — la cambias al primer ingreso.",
+  contentKey: "temp_password_sent",
+  delay: 700,
+};
 
 // ─── Correos ya registrados (simulación) ─────────────────────────────────────
 // En producción esto sería una llamada a la API. Aquí hardcodeamos para demo.

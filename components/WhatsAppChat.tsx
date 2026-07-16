@@ -17,14 +17,16 @@ import {
   PUBLISH_VARIANT_C_STEPS,
   ASK_PROFILE_STEP,
   SUCCESS_STEP,
-  SUCCESS_STEP_V2,
   A_RECONFIRM_STEP,
   ASK_EMAIL_CORRECTION_STEP,
   ASK_NAME_CORRECTION_STEP,
-  V1_ASK_CODE_STEP,
-  V1_CODE_SUCCESS_STEP,
-  V1_CODE_WRONG_STEP,
-  V1_RESENT_STEP,
+  OTP_ASK_CODE_STEP,
+  OTP_CODE_SUCCESS_STEP,
+  OTP_CODE_WRONG_STEP,
+  OTP_RESENT_STEP,
+  ASK_PASSWORD_CHOICE_STEP,
+  ASK_PASSWORD_INPUT_STEP,
+  TEMP_PASSWORD_SENT_STEP,
   EXISTING_USER_STEPS,
   REGISTERED_EMAILS,
   HUMAN_HANDOFF_STEP,
@@ -69,6 +71,7 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
   const platformRedirectAnswered = useRef(false);
   const photosCompletedMessages = useRef<Set<string>>(new Set());
   const verificationCallback = useRef<(() => void) | null>(null);
+  const passwordCallback = useRef<(() => void) | null>(null);
   // Cuenta intentos inválidos por campo (sin tocar el reducer)
   const invalidAttempts = useRef<Record<string, number>>({});
 
@@ -83,6 +86,7 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     platformRedirectAnswered.current = false;
     photosCompletedMessages.current.clear();
     verificationCallback.current = null;
+    passwordCallback.current = null;
     invalidAttempts.current = {};
     dispatch({ type: "RESET" });
     msgIdCounter = 0;
@@ -133,14 +137,14 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     });
   }, []);
 
-  // ─── Verification branch (V0/V1/V2) ─────────────────────────────────────────
+  // ─── Verification branch (V0 / WA / EMAIL / SMS) ────────────────────────────
   const runVerification = useCallback(
     (ctx: ConversationContext, onComplete: () => void) => {
-      if (verificationMethod === "V0" || verificationMethod === "V2") {
+      if (verificationMethod === "V0") {
         onComplete();
         return;
       }
-      const askStep = V1_ASK_CODE_STEP(ctx.email);
+      const askStep = OTP_ASK_CODE_STEP(verificationMethod, ctx);
       emitBotMessage(askStep, ctx, () => {
         dispatch({ type: "SET_AWAITING_INPUT", target: "verif_code" });
         dispatch({ type: "SET_PHASE", phase: "flow" });
@@ -150,6 +154,22 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     [verificationMethod, emitBotMessage]
   );
 
+  // ─── Password step (Variante A y C — B lo resuelve en el form) ──────────────
+  const proceedToPassword = useCallback(
+    (ctx: ConversationContext, onDone: () => void) => {
+      if (variant === "B") {
+        // B captura contraseña en el form nativo — no hay paso conversacional extra
+        onDone();
+        return;
+      }
+      emitBotMessage(ASK_PASSWORD_CHOICE_STEP, ctx, () => {
+        dispatch({ type: "SET_PHASE", phase: "ask_password" });
+        passwordCallback.current = onDone;
+      });
+    },
+    [variant, emitBotMessage]
+  );
+
   // ─── Proceed to profile (all variants after data collection) ─────────────────
   const proceedToProfile = useCallback(
     (ctx: ConversationContext, preStep?: Step) => {
@@ -157,21 +177,23 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
         emitBotMessage(ASK_PROFILE_STEP, ctx);
         dispatch({ type: "SET_PHASE", phase: "ask_profile" });
       };
-      const doVerifyThenProfile = () => runVerification(ctx, doProfile);
+      // Contraseña se inserta entre verificación y selección de perfil
+      const doPasswordThenProfile = () => proceedToPassword(ctx, doProfile);
+      const doVerifyThenPassword  = () => runVerification(ctx, doPasswordThenProfile);
       if (preStep) {
-        emitBotMessage(preStep, ctx, doVerifyThenProfile);
+        emitBotMessage(preStep, ctx, doVerifyThenPassword);
       } else {
-        doVerifyThenProfile();
+        doVerifyThenPassword();
       }
     },
-    [emitBotMessage, runVerification]
+    [emitBotMessage, runVerification, proceedToPassword]
   );
 
   // ─── Success (onboarding) ────────────────────────────────────────────────────
   const runSuccess = useCallback(
     (ctx: ConversationContext) => {
       const profile = ctx.profile ?? "propietario";
-      const successStep = verificationMethod === "V2" ? SUCCESS_STEP_V2 : SUCCESS_STEP;
+      const successStep = SUCCESS_STEP;
       emitBotMessage(successStep, ctx, () => {
         const welcomeMsg: ChatMessage = {
           id: newId(),
@@ -288,6 +310,7 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
       platformRedirectAnswered.current = false;
       photosCompletedMessages.current.clear();
       verificationCallback.current = null;
+      passwordCallback.current = null;
       msgIdCounter = 0;
     }
 
@@ -369,8 +392,25 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
           dispatch({ type: "SET_CORRECTION_MODE", mode: "name" });
         });
       } else if (optId === "resend_code") {
-        emitBotMessage(V1_RESENT_STEP, ctx, () => {
+        const channel = verificationMethod === "V0" ? "EMAIL" : verificationMethod;
+        emitBotMessage(OTP_RESENT_STEP(channel), ctx, () => {
           dispatch({ type: "SET_AWAITING_INPUT", target: "verif_code" });
+        });
+      }
+      return;
+    }
+
+    if (state.phase === "ask_password") {
+      if (optId === "create_password") {
+        emitBotMessage(ASK_PASSWORD_INPUT_STEP, ctx, () => {
+          dispatch({ type: "SET_AWAITING_INPUT", target: "password" });
+          dispatch({ type: "SET_PHASE", phase: "password_input" });
+        });
+      } else if (optId === "temp_password") {
+        dispatch({ type: "SET_CONTEXT", context: { usesTempPassword: true } });
+        emitBotMessage(TEMP_PASSWORD_SENT_STEP, { ...ctx, usesTempPassword: true }, () => {
+          passwordCallback.current?.();
+          passwordCallback.current = null;
         });
       }
       return;
@@ -511,18 +551,36 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     const val = state.inputValue.trim();
     if (!val) return;
 
-    // V1 — OTP
+    // Contraseña — enmascarar bubble, validar mínimo 8 chars
+    if (state.phase === "password_input") {
+      if (val.length < 8) {
+        emitUserMessage("•".repeat(val.length)); // mostrar mascarado aunque sea inválido
+        dispatch({ type: "SET_INPUT_VALUE", value: "" });
+        emitBotError(getCopy("password_too_short", tone, state.context));
+        return;
+      }
+      emitUserMessage("•".repeat(val.length)); // bubble enmascarado
+      dispatch({ type: "SET_INPUT_VALUE", value: "" });
+      dispatch({ type: "SET_AWAITING_INPUT", target: null });
+      dispatch({ type: "SET_CONTEXT", context: { password: val, usesTempPassword: false } });
+      dispatch({ type: "SET_PHASE", phase: "flow" });
+      passwordCallback.current?.();
+      passwordCallback.current = null;
+      return;
+    }
+
+    // OTP — WA / EMAIL / SMS
     if (state.currentInputTarget === "verif_code") {
       emitUserMessage(val);
       dispatch({ type: "SET_INPUT_VALUE", value: "" });
       dispatch({ type: "SET_AWAITING_INPUT", target: null });
       if (val === DEMO_CODE) {
-        emitBotMessage(V1_CODE_SUCCESS_STEP, state.context, () => {
+        emitBotMessage(OTP_CODE_SUCCESS_STEP, state.context, () => {
           verificationCallback.current?.();
           verificationCallback.current = null;
         });
       } else {
-        emitBotMessage(V1_CODE_WRONG_STEP, state.context);
+        emitBotMessage(OTP_CODE_WRONG_STEP, state.context);
       }
       return;
     }
@@ -776,17 +834,23 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     const name = values["name"] ?? "";
     const email = values["email"] ?? "";
     const profileRaw = values["profile"] ?? "";
+    const usesTempPassword = values["prefer_temp_password"] === "true";
+    const password = usesTempPassword ? undefined : (values["password"] ?? undefined);
     const profile: UserProfile | null =
-      profileRaw === "Soy propietario"   ? "propietario"
-      : profileRaw === "Soy broker"      ? "broker"
+      profileRaw === "Soy propietario"     ? "propietario"
+      : profileRaw === "Soy broker"        ? "broker"
       : profileRaw === "Soy desarrollador" ? "desarrollador"
       : null;
 
-    const summary = profile ? `${name} · ${email} · ${profileRaw}` : `${name} · ${email}`;
+    // Bubble enmascarado para la contraseña
+    const pwdSummary = usesTempPassword ? "clave temporal" : (password ? "•".repeat(password.length) : "");
+    const summary = profile
+      ? `${name} · ${email} · ${profileRaw}${pwdSummary ? ` · ${pwdSummary}` : ""}`
+      : `${name} · ${email}`;
     emitUserMessage(summary);
 
-    const newCtx = { ...state.context, name, email, profile };
-    dispatch({ type: "SET_CONTEXT", context: { name, email, profile } });
+    const newCtx = { ...state.context, name, email, profile, password, usesTempPassword };
+    dispatch({ type: "SET_CONTEXT", context: { name, email, profile, password, usesTempPassword } });
 
     const receivedStep = VARIANT_B_STEPS.find((s) => s.id === "b_received");
 
@@ -858,10 +922,12 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     : state.currentInputTarget === "name"      ? "Escribe tu nombre…"
     : state.currentInputTarget === "size"      ? "Ej. 250"
     : state.currentInputTarget === "price"     ? "Ej. 25000"
+    : state.currentInputTarget === "password"  ? "Mínimo 8 caracteres…"
     : "Escribe tu correo…";
 
   const inputType =
-    state.currentInputTarget === "email" ? "email"
+    state.currentInputTarget === "email"    ? "email"
+    : state.currentInputTarget === "password" ? "password"
     : "text";
 
   const isPublishFormPhase = state.phase === "publish_address" || state.phase === "publish_form_b";
