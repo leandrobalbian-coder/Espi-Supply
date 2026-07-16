@@ -777,8 +777,9 @@ export default function WhatsAppChat({ variant, verificationMethod, startMode, t
     const email = values["email"] ?? "";
     const profileRaw = values["profile"] ?? "";
     const profile: UserProfile | null =
-      profileRaw === "Soy propietario" ? "propietario"
-      : profileRaw === "Soy broker" ? "broker"
+      profileRaw === "Soy propietario"   ? "propietario"
+      : profileRaw === "Soy broker"      ? "broker"
+      : profileRaw === "Soy desarrollador" ? "desarrollador"
       : null;
 
     const summary = profile ? `${name} · ${email} · ${profileRaw}` : `${name} · ${email}`;

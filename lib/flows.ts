@@ -6,7 +6,7 @@
 
 export type Variant = "A" | "B" | "C";
 export type VerificationMethod = "V0" | "V1" | "V2";
-export type UserProfile = "propietario" | "broker";
+export type UserProfile = "propietario" | "broker" | "desarrollador";
 
 export type StepType =
   | "text"
@@ -141,8 +141,9 @@ export const ASK_PROFILE_STEP: Step = {
   contentKey: "ask_profile",
   delay: 800,
   options: [
-    { id: "propietario", label: "Soy propietario" },
-    { id: "broker", label: "Soy broker" },
+    { id: "propietario",   label: "Soy propietario" },  // 15 chars ✓
+    { id: "broker",        label: "Soy broker" },        // 9 chars ✓
+    { id: "desarrollador", label: "Soy desarrollador" }, // 17 chars ✓ — máx 3 quick replies Meta
   ],
   requiresInput: true,
 };
@@ -334,7 +335,7 @@ export const VARIANT_B_STEPS: Step[] = [
         label: "Tipo de cuenta",
         type: "select",
         placeholder: "Selecciona tu perfil",
-        options: ["Soy propietario", "Soy broker"],
+        options: ["Soy propietario", "Soy broker", "Soy desarrollador"],
       },
     ],
     requiresInput: true,

@@ -6,7 +6,7 @@
 
 import { AGENT_NAME } from "./persona";
 
-export type UserProfile = "propietario" | "broker";
+export type UserProfile = "propietario" | "broker" | "desarrollador";
 
 // ─── Apertura ────────────────────────────────────────────────────────────────
 
@@ -107,6 +107,11 @@ export const WELCOME_MESSAGES: Record<UserProfile, string> = {
     `¡Bienvenido a Spot2! Desde aquí puedes gestionar todos tus espacios ` +
     `y conectarlos con empresas que los están buscando. ` +
     `¿Listo para publicar tu primer listado?`,
+  desarrollador:
+    `[PLACEHOLDER voz-Espi — bienvenida Desarrollador, validar con Growth]\n` +
+    `¡Bienvenido a Spot2! Puedes publicar tus desarrollos y conectarlos con ` +
+    `empresas que buscan espacios a la medida. ` +
+    `¿Publicamos tu primer desarrollo?`,
 };
 
 export const WELCOME_CTAS: Record<UserProfile, { label: string; url: string }[]> = {
@@ -117,5 +122,10 @@ export const WELCOME_CTAS: Record<UserProfile, { label: string; url: string }[]>
   broker: [
     { label: "Publicar un espacio", url: "action:publish_space" }, // brokers también publican
     { label: "Ver el dashboard",    url: "https://spot2.mx/dashboard" },
+  ],
+  desarrollador: [
+    // [PLACEHOLDER Growth — CTA desarrollador, validar con Growth]
+    { label: "Publicar mi desarrollo", url: "action:publish_space" },
+    { label: "Ver el dashboard",       url: "https://spot2.mx/dashboard" },
   ],
 };
